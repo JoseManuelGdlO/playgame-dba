@@ -23,9 +23,15 @@ Explorado vía compañero visual: se descartaron "Retro Corporate OS" (Windows 9
 - **Chat corporativo** (entrega de tickets, Etapa 7): mismos tonos oscuros/acentos, burbujas de mensaje con avatares mínimos.
 - **Visor de esquema/ERD** (Etapa 7): presentado como otra "herramienta real" (tipo dbdiagram.io/DataGrip), misma paleta — refuerza la identidad de "vives dentro de herramientas de developer reales".
 
-## Personajes: avatares mínimos, no ilustración completa
+## Personajes: retratos pixel art estilo "Papers, Please" (actualizado en Etapa 18)
 
-Los personajes (jefes, Mentor, compañeros) se representan con avatares circulares mínimos (iniciales o iconos geométricos simples, estilo foto de perfil por defecto de Slack/Teams) en vez de retratos ilustrados — mantiene el Pilar 5 y da pie a un chiste satírico gratuito: todos en la oficina tienen el mismo avatar genérico por defecto porque nadie se tomó el tiempo de subir una foto real.
+**Revisión:** la primera versión de esta etapa proponía avatares mínimos de iniciales/iconos genéricos. Al definir la Etapa 18 (Arquitectura técnica) se decidió añadir una capa de arte adicional: los personajes (jefes, Mentor, mini-bosses) se representan con **retratos pixel art de baja resolución estilo *Papers, Please*** — pequeños, expresivos, paleta apagada/burocrática, animación mínima. Sigue siendo barato de producir (incluso asistible con generación de imagen por IA), pero da mucho más carácter que un ícono de iniciales.
+
+Esto crea dos capas de arte separadas y deliberadamente distintas, ambas coexistiendo sin conflicto:
+- **Superficies de herramienta** (consola SQL, chat, visor ERD): Terminal Moderno, paleta Catppuccin Mocha — son software real dentro de la ficción.
+- **Superficies de mundo/personajes** (retratos, marco de escritorio/cubículo): pixel art estilo Papers, Please, paleta más apagada — es la "carne" humana/narrativa alrededor del software.
+
+El chiste satírico del "avatar genérico" de la versión anterior se descarta junto con ese enfoque.
 
 ## Tipografía
 
