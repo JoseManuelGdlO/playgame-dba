@@ -25,6 +25,10 @@ struct EmbeddedPostgres(Mutex<Option<postgresql_embedded::PostgreSQL>>);
 #[derive(serde::Serialize)]
 struct ScoreResult {
     pass: bool,
+    puntaje_correctitud: f64,
+    puntaje_velocidad: f64,
+    puntaje_practicas: f64,
+    comentario_mentor: Option<String>,
     dinero_ganado: i64,
     dinero_total: i64,
     mensaje: String,
@@ -52,19 +56,23 @@ async fn submit_ticket(
     perk: tauri::State<'_, Perk>,
     sql: String,
 ) -> Result<ScoreResult, String> {
-    let jugador = db::run_query(&state.pool, &sql).await.map_err(|e| e.to_string())?;
-    let esperado = db::run_ticket_solution(&state.pool).await.map_err(|e| e.to_string())?;
-    let pass = jugador.rows == esperado.rows;
+    let evaluacion = validation::evaluar_entrega(&state.pool, &sql, db::TICKET_SOLUCION_ACTUAL, true)
+        .await
+        .map_err(|e| e.to_string())?;
 
     let mut perk_state = perk.0.lock().unwrap();
-    let dinero_ganado = if pass { 500 } else { 0 };
+    let dinero_ganado = if evaluacion.correcta { 500 } else { 0 };
     perk_state.dinero += dinero_ganado;
 
     Ok(ScoreResult {
-        pass,
+        pass: evaluacion.correcta,
+        puntaje_correctitud: evaluacion.puntaje_correctitud,
+        puntaje_velocidad: evaluacion.puntaje_velocidad,
+        puntaje_practicas: evaluacion.puntaje_practicas,
+        comentario_mentor: evaluacion.comentario_mentor.map(str::to_string),
         dinero_ganado,
         dinero_total: perk_state.dinero,
-        mensaje: if pass {
+        mensaje: if evaluacion.correcta {
             "Ticket resuelto. Contabilidad procesará tu pago... eventualmente.".to_string()
         } else {
             "El resultado no coincide con lo que pidió Contabilidad. Revisa tu WHERE/ORDER BY.".to_string()
