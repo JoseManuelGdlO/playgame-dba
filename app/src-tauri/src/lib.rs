@@ -22,11 +22,6 @@ struct Perk(Mutex<PerkState>);
 struct EmbeddedPostgres(Mutex<Option<postgresql_embedded::PostgreSQL>>);
 
 #[derive(serde::Serialize)]
-pub struct QueryResult {
-    rows: Vec<serde_json::Value>,
-}
-
-#[derive(serde::Serialize)]
 struct ScoreResult {
     pass: bool,
     dinero_ganado: i64,
@@ -46,7 +41,7 @@ fn ticket_actual() -> &'static str {
 }
 
 #[tauri::command]
-async fn run_query(state: tauri::State<'_, AppState>, sql: String) -> Result<QueryResult, String> {
+async fn run_query(state: tauri::State<'_, AppState>, sql: String) -> Result<db::QueryResult, String> {
     db::run_query(&state.pool, &sql).await.map_err(|e| e.to_string())
 }
 

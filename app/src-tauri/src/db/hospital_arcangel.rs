@@ -1,16 +1,9 @@
-use postgresql_embedded::{PostgreSQL, Settings};
-use serde_json::Value;
-use sqlx::postgres::PgPoolOptions;
-use sqlx::{PgPool, Row};
-
-use crate::QueryResult;
-
-const DB_NAME: &str = "query_path_spike";
+pub(crate) const DB_NAME: &str = "query_path_hospital_arcangel";
 
 /// Walking skeleton del esquema de Hospital Arcángel (Etapa 16): 3 tablas,
 /// suficientes para probar JOIN, agregación, window functions y CTE recursivo
 /// (jerarquía jefe_id) contra un Postgres real.
-const SCHEMA_SQL: &str = r#"
+pub(crate) const SCHEMA_SQL: &str = r#"
 CREATE TABLE departamentos (
     id SERIAL PRIMARY KEY,
     nombre TEXT NOT NULL
@@ -35,7 +28,7 @@ CREATE TABLE pacientes (
 );
 "#;
 
-const SEED_SQL: &str = r#"
+pub(crate) const SEED_SQL: &str = r#"
 INSERT INTO departamentos (id, nombre) VALUES
     (1, 'Cardiología'),
     (2, 'Urgencias'),
@@ -65,78 +58,13 @@ SELECT setval('departamentos_id_seq', (SELECT max(id) FROM departamentos));
 /// solo SELECT/WHERE/ORDER BY (Etapa 10).
 pub const TICKET_ENUNCIADO: &str = "Motivo: Contabilidad quiere saber quién ha pisado Cardiología últimamente.\nSolicitud: lista los pacientes admitidos en Cardiología (nombre, fecha de admisión y motivo), del más reciente al más antiguo.";
 
-const TICKET_SOLUCION: &str =
+pub(crate) const TICKET_SOLUCION: &str =
     "SELECT nombre, fecha_admision, motivo FROM pacientes WHERE departamento_id = 1 ORDER BY fecha_admision DESC";
-
-/// Arranca Postgres embebido (descarga en compile-time vía el feature `bundled`,
-/// cero red en runtime), crea la base y carga schema+seed. Devuelve el manejador
-/// del servidor (hay que mantenerlo vivo mientras la app corra) y el pool de conexión.
-pub async fn init_embedded_postgres() -> anyhow::Result<(PostgreSQL, PgPool)> {
-    let settings = Settings::new();
-    let mut pg = PostgreSQL::new(settings);
-    pg.setup().await?;
-    pg.start().await?;
-
-    if !pg.database_exists(DB_NAME).await? {
-        pg.create_database(DB_NAME).await?;
-    }
-
-    let url = pg.settings().url(DB_NAME);
-    let pool = PgPoolOptions::new().max_connections(5).connect(&url).await?;
-
-    sqlx::raw_sql(SCHEMA_SQL).execute(&pool).await?;
-    sqlx::raw_sql(SEED_SQL).execute(&pool).await?;
-
-    Ok((pg, pool))
-}
-
-/// Ejecuta SQL arbitrario escrito por el jugador. Alcance del spike (Etapa 14):
-/// solo lectura — SELECT/CTE (incl. recursivo) y EXPLAIN.
-///
-/// El texto viene del jugador, así que sqlx exige envolverlo en `AssertSqlSafe`
-/// para reconocer explícitamente que no hay bind params posibles aquí: ejecutar
-/// SQL libre del jugador es el propósito del juego, no una vulnerabilidad.
-pub async fn run_query(pool: &PgPool, sql: &str) -> anyhow::Result<QueryResult> {
-    let trimmed = sql.trim().trim_end_matches(';');
-    if trimmed.is_empty() {
-        anyhow::bail!("La query está vacía.");
-    }
-
-    let rows: Vec<Value> = if trimmed[..7.min(trimmed.len())].eq_ignore_ascii_case("explain") {
-        let db_rows = sqlx::query(sqlx::AssertSqlSafe(trimmed.to_string()))
-            .fetch_all(pool)
-            .await?;
-        db_rows
-            .into_iter()
-            .map(|row| {
-                let plan_line: String = row.try_get(0).unwrap_or_default();
-                serde_json::json!({ "QUERY PLAN": plan_line })
-            })
-            .collect()
-    } else {
-        let wrapped = format!(
-            "SELECT coalesce(json_agg(row_to_json(query_result_row)), '[]'::json) AS result FROM ({trimmed}) AS query_result_row"
-        );
-        let row = sqlx::query(sqlx::AssertSqlSafe(wrapped))
-            .fetch_one(pool)
-            .await?;
-        let value: Value = row.try_get(0)?;
-        match value {
-            Value::Array(items) => items,
-            other => vec![other],
-        }
-    };
-
-    Ok(QueryResult { rows })
-}
-
-pub async fn run_ticket_solution(pool: &PgPool) -> anyhow::Result<QueryResult> {
-    run_query(pool, TICKET_SOLUCION).await
-}
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::super::*;
+    use super::TICKET_SOLUCION;
 
     /// Prueba de punta a punta del stack (Etapa 18/22): arranca Postgres
     /// embebido, y ejecuta window function, CTE recursivo y EXPLAIN reales —
