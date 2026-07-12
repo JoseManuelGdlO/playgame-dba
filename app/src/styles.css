@@ -1,0 +1,161 @@
+:root {
+  font-family: -apple-system, "Segoe UI", Inter, Avenir, Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  color: #cdd6f4;
+  background-color: #1e1e2e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 3rem;
+}
+
+header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  border-bottom: 1px solid #313244;
+  padding-bottom: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+h1 {
+  font-size: 1.3rem;
+  margin: 0;
+}
+
+.subtitle {
+  color: #9399b2;
+  font-weight: 400;
+  font-size: 0.9rem;
+}
+
+.stats {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.95rem;
+}
+
+.perk-locked {
+  color: #9399b2;
+}
+
+.perk-unlocked {
+  color: #a6e3a1;
+}
+
+section {
+  margin-bottom: 1.5rem;
+}
+
+h2 {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9399b2;
+  margin: 0 0 0.5rem;
+}
+
+.ticket pre {
+  background: #313244;
+  border-radius: 8px;
+  padding: 1rem;
+  white-space: pre-wrap;
+  font-family: inherit;
+  margin: 0;
+}
+
+textarea {
+  width: 100%;
+  min-height: 140px;
+  background: #11111b;
+  color: #a6e3a1;
+  border: 1px solid #313244;
+  border-radius: 8px;
+  padding: 0.75rem;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.95rem;
+  resize: vertical;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid #45475a;
+  padding: 0.5em 1.1em;
+  font-size: 0.9em;
+  font-weight: 500;
+  font-family: inherit;
+  color: #cdd6f4;
+  background-color: #313244;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: #89b4fa;
+}
+
+button:active {
+  background-color: #45475a;
+}
+
+#btn-play {
+  color: #a6e3a1;
+  border-color: #a6e3a1;
+}
+
+#btn-submit {
+  color: #89b4fa;
+  border-color: #89b4fa;
+}
+
+#status-msg {
+  min-height: 1.2em;
+}
+
+#status-msg.ok {
+  color: #a6e3a1;
+}
+
+#status-msg.error {
+  color: #f38ba8;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9rem;
+}
+
+th,
+td {
+  border: 1px solid #313244;
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+}
+
+th {
+  background: #313244;
+  color: #cba6f7;
+}
+
+tr:nth-child(even) td {
+  background: #181825;
+}

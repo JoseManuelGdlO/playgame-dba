@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Query Path — Spike técnico</title>
+    <script type="module" src="/main.js" defer></script>
+  </head>
+
+  <body>
+    <main class="container">
+      <header>
+        <h1>Query Path <span class="subtitle">— spike técnico (Tauri + Postgres embebido)</span></h1>
+        <div class="stats">
+          <span>💰 <span id="dinero">0</span></span>
+          <span id="perk-indicator" class="perk-locked">🔒 Perk: Café Cargado</span>
+        </div>
+      </header>
+
+      <section class="ticket">
+        <h2>Ticket</h2>
+        <pre id="ticket-enunciado">cargando...</pre>
+      </section>
+
+      <section class="console">
+        <textarea id="sql-input" spellcheck="false" placeholder="SELECT * FROM pacientes;"></textarea>
+        <div class="actions">
+          <button id="btn-play">▶ Play</button>
+          <button id="btn-submit">✓ Enviar ticket</button>
+          <button id="btn-unlock-perk">Desbloquear perk (300)</button>
+        </div>
+      </section>
+
+      <section class="output">
+        <h2>Resultado</h2>
+        <p id="status-msg"></p>
+        <div id="result-table"></div>
+      </section>
+    </main>
+  </body>
+</html>
