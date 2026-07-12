@@ -102,9 +102,12 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
             tauri::async_runtime::block_on(async move {
-                let (pg, pool) = db::init_embedded_postgres()
+                let pg = db::init_embedded_postgres()
                     .await
-                    .expect("no se pudo inicializar Postgres embebido — spike fallido");
+                    .expect("no se pudo inicializar Postgres embebido");
+                let pool = db::load_company(&pg, db::Company::HospitalArcangel)
+                    .await
+                    .expect("no se pudo cargar Hospital Arcángel");
                 handle.manage(AppState { pool });
                 handle.manage(Perk(Mutex::new(PerkState::default())));
                 handle.manage(EmbeddedPostgres(Mutex::new(Some(pg))));
