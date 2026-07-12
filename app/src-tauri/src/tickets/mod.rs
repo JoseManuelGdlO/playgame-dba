@@ -184,6 +184,8 @@ fn plantilla_depuracion(
     }
 }
 
+mod hospital_arcangel;
+
 #[cfg(test)]
 mod tests {
     use super::*;
