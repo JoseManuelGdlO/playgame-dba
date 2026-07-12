@@ -185,6 +185,16 @@ fn plantilla_depuracion(
 }
 
 mod hospital_arcangel;
+mod postafeta;
+
+/// Catálogo de tickets de `company` (Etapa 14) — generado por las plantillas
+/// paramétricas de este módulo, nunca escrito a mano ticket por ticket.
+pub fn catalogo(company: crate::db::Company) -> Vec<Ticket> {
+    match company {
+        crate::db::Company::HospitalArcangel => hospital_arcangel::catalogo(),
+        crate::db::Company::Postafeta => postafeta::catalogo(),
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -242,5 +252,11 @@ mod tests {
         assert_eq!(ticket.sql_dorada, "SELECT rapida");
         assert_eq!(ticket.arquetipos, vec![Arquetipo::Join]);
         assert_eq!((ticket.peso_correctitud, ticket.peso_velocidad, ticket.peso_practicas), (0.3, 0.5, 0.2));
+    }
+
+    #[test]
+    fn catalogo_devuelve_6_tickets_para_cada_empresa() {
+        assert_eq!(catalogo(crate::db::Company::HospitalArcangel).len(), 6);
+        assert_eq!(catalogo(crate::db::Company::Postafeta).len(), 6);
     }
 }
