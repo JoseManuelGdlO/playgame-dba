@@ -38,7 +38,8 @@ pub async fn evaluar_entrega(
         &resultado_jugador.rows,
         requiere_orden,
     );
-    let puntaje_correctitud = if correcta { 100.0 } else { 0.0 };
+    let puntaje_correctitud =
+        correctness::puntaje(&resultado_dorado.rows, &resultado_jugador.rows, requiere_orden);
 
     let costo_dorado = speed::costo_del_plan(pool, sql_dorada).await?;
     let costo_jugador = speed::costo_del_plan(pool, sql_jugador).await?;

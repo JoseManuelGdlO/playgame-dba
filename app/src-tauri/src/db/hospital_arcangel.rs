@@ -236,7 +236,7 @@ mod tests {
         assert!(!plan.rows.is_empty());
 
         let jugador = run_query(&pool, TICKET_SOLUCION).await.unwrap();
-        let esperado = run_ticket_solution(&pool).await.unwrap();
+        let esperado = run_query(&pool, TICKET_SOLUCION).await.unwrap();
         assert_eq!(jugador.rows, esperado.rows, "la solución del ticket debe pasar contra sí misma");
 
         pool.close().await;

@@ -1,7 +1,7 @@
 mod hospital_arcangel;
 mod postafeta;
 
-/// Hardcodeado a Hospital Arcángel — cuando el motor de tickets (Plan 2)
+/// Hardcodeado a Hospital Arcángel — cuando el plan de generación de tickets
 /// generalice esto por empresa, este re-export debe volverse company-aware.
 pub(crate) use hospital_arcangel::{TICKET_ENUNCIADO, TICKET_SOLUCION as TICKET_SOLUCION_ACTUAL};
 
@@ -119,12 +119,6 @@ pub async fn run_query(pool: &PgPool, sql: &str) -> anyhow::Result<QueryResult> 
     };
 
     Ok(QueryResult { rows })
-}
-
-/// Hardcodeado a Hospital Arcángel — cuando el motor de tickets (Plan 2)
-/// generalice esto por empresa, esta función debe volverse company-aware.
-pub async fn run_ticket_solution(pool: &PgPool) -> anyhow::Result<QueryResult> {
-    run_query(pool, hospital_arcangel::TICKET_SOLUCION).await
 }
 
 #[cfg(test)]
