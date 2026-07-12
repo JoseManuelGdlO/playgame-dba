@@ -204,9 +204,10 @@ mod tests {
     /// justo lo que SQLite no puede hacer y por lo que se eligió este stack.
     #[tokio::test]
     async fn walking_skeleton_end_to_end() {
-        let (pg, pool) = init_embedded_postgres()
+        let pg = init_embedded_postgres().await.expect("Postgres embebido debe arrancar");
+        let pool = load_company(&pg, Company::HospitalArcangel)
             .await
-            .expect("Postgres embebido debe arrancar");
+            .expect("Hospital Arcángel debe cargar");
 
         let ranking = run_query(
             &pool,
@@ -244,9 +245,10 @@ mod tests {
 
     #[tokio::test]
     async fn reporte_costos_por_departamento() {
-        let (pg, pool) = init_embedded_postgres()
+        let pg = init_embedded_postgres().await.expect("Postgres embebido debe arrancar");
+        let pool = load_company(&pg, Company::HospitalArcangel)
             .await
-            .expect("Postgres embebido debe arrancar");
+            .expect("Hospital Arcángel debe cargar");
 
         let resultado = run_query(
             &pool,
@@ -268,9 +270,10 @@ mod tests {
 
     #[tokio::test]
     async fn habitaciones_y_seguros_cargan_correctamente() {
-        let (pg, pool) = init_embedded_postgres()
+        let pg = init_embedded_postgres().await.expect("Postgres embebido debe arrancar");
+        let pool = load_company(&pg, Company::HospitalArcangel)
             .await
-            .expect("Postgres embebido debe arrancar");
+            .expect("Hospital Arcángel debe cargar");
 
         let habitaciones = run_query(&pool, "SELECT * FROM habitaciones").await.unwrap();
         assert_eq!(habitaciones.rows.len(), 14);
