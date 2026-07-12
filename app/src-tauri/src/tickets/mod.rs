@@ -30,6 +30,10 @@ pub enum TipoTicket {
 pub enum Prioridad {
     Baja,
     Media,
+    // Ningún ticket de los catálogos actuales (Hospital Arcángel/Postafeta,
+    // Tareas 2-3) usa esta prioridad todavía — queda reservada para tickets
+    // futuros de mayor urgencia.
+    #[allow(dead_code)]
     Urgente,
 }
 

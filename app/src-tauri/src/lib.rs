@@ -23,6 +23,14 @@ struct Perk(Mutex<PerkState>);
 /// Mantiene vivo el servidor Postgres embebido y permite detenerlo al salir.
 struct EmbeddedPostgres(Mutex<Option<postgresql_embedded::PostgreSQL>>);
 
+/// Catálogo de tickets de la empresa activa + índice del ticket actual
+/// (Etapa 14). Selección round-robin simple — sin bandeja de entrada ni
+/// tiempo de turno todavía (Etapa 11-A, plan de UI/loop posterior).
+struct Tickets {
+    catalogo: Vec<tickets::Ticket>,
+    indice_actual: Mutex<usize>,
+}
+
 #[derive(serde::Serialize)]
 struct ScoreResult {
     pass: bool,
@@ -42,8 +50,9 @@ struct PerkStatus {
 }
 
 #[tauri::command]
-fn ticket_actual() -> &'static str {
-    db::TICKET_ENUNCIADO
+fn ticket_actual(tickets: tauri::State<'_, Tickets>) -> tickets::Ticket {
+    let indice = *tickets.indice_actual.lock().unwrap();
+    tickets.catalogo[indice].clone()
 }
 
 #[tauri::command]
@@ -55,15 +64,25 @@ async fn run_query(state: tauri::State<'_, AppState>, sql: String) -> Result<db:
 async fn submit_ticket(
     state: tauri::State<'_, AppState>,
     perk: tauri::State<'_, Perk>,
+    tickets: tauri::State<'_, Tickets>,
     sql: String,
 ) -> Result<ScoreResult, String> {
-    let evaluacion = validation::evaluar_entrega(&state.pool, &sql, db::TICKET_SOLUCION_ACTUAL, true)
+    let indice = *tickets.indice_actual.lock().unwrap();
+    let sql_dorada = tickets.catalogo[indice].sql_dorada.clone();
+    let requiere_orden = tickets.catalogo[indice].requiere_orden;
+
+    let evaluacion = validation::evaluar_entrega(&state.pool, &sql, &sql_dorada, requiere_orden)
         .await
         .map_err(|e| e.to_string())?;
 
     let mut perk_state = perk.0.lock().unwrap();
     let dinero_ganado = if evaluacion.correcta { 500 } else { 0 };
     perk_state.dinero += dinero_ganado;
+
+    if evaluacion.correcta {
+        let mut indice_mut = tickets.indice_actual.lock().unwrap();
+        *indice_mut = (*indice_mut + 1) % tickets.catalogo.len();
+    }
 
     Ok(ScoreResult {
         pass: evaluacion.correcta,
@@ -76,7 +95,7 @@ async fn submit_ticket(
         mensaje: if evaluacion.correcta {
             "Ticket resuelto. Contabilidad procesará tu pago... eventualmente.".to_string()
         } else {
-            "El resultado no coincide con lo que pidió Contabilidad. Revisa tu WHERE/ORDER BY.".to_string()
+            "El resultado no coincide con lo que pidió la solicitud. Revisa tu consulta.".to_string()
         },
     })
 }
@@ -118,8 +137,10 @@ pub fn run() {
                 let pool = db::load_company(&pg, db::Company::HospitalArcangel)
                     .await
                     .expect("no se pudo cargar Hospital Arcángel");
+                let catalogo = tickets::catalogo(db::Company::HospitalArcangel);
                 handle.manage(AppState { pool });
                 handle.manage(Perk(Mutex::new(PerkState::default())));
+                handle.manage(Tickets { catalogo, indice_actual: Mutex::new(0) });
                 handle.manage(EmbeddedPostgres(Mutex::new(Some(pg))));
             });
             Ok(())

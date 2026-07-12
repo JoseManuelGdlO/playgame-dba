@@ -84,8 +84,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   perkIndicator = document.querySelector("#perk-indicator");
   ticketEnunciado = document.querySelector("#ticket-enunciado");
 
-  ticketEnunciado.textContent = await invoke("ticket_actual");
-  sqlInput.value = "SELECT * FROM pacientes;";
+  const ticket = await invoke("ticket_actual");
+  ticketEnunciado.textContent = `Motivo: ${ticket.motivo}\nSolicitud: ${ticket.solicitud}`;
+  sqlInput.value = ticket.sql_inicial || "SELECT * FROM pacientes;";
 
   document.querySelector("#btn-play").addEventListener("click", runQuery);
   document.querySelector("#btn-submit").addEventListener("click", submitTicket);

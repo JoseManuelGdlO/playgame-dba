@@ -1,10 +1,6 @@
 mod hospital_arcangel;
 mod postafeta;
 
-/// Hardcodeado a Hospital Arcángel — cuando el plan de generación de tickets
-/// generalice esto por empresa, este re-export debe volverse company-aware.
-pub(crate) use hospital_arcangel::{TICKET_ENUNCIADO, TICKET_SOLUCION as TICKET_SOLUCION_ACTUAL};
-
 use postgresql_embedded::{PostgreSQL, Settings};
 use serde_json::Value;
 use sqlx::postgres::PgPoolOptions;

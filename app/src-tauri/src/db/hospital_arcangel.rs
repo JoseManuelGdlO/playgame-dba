@@ -187,17 +187,9 @@ SELECT setval('tratamientos_id_seq', (SELECT max(id) FROM tratamientos));
 SELECT setval('habitaciones_id_seq', (SELECT max(id) FROM habitaciones));
 "#;
 
-/// El único ticket de Hospital Arcángel por ahora (Etapa 14): rango Becario,
-/// solo SELECT/WHERE/ORDER BY (Etapa 10).
-pub const TICKET_ENUNCIADO: &str = "Motivo: Contabilidad quiere saber quién ha pisado Cardiología últimamente.\nSolicitud: lista los pacientes admitidos en Cardiología (nombre, fecha de ingreso y diagnóstico), del más reciente al más antiguo.";
-
-pub(crate) const TICKET_SOLUCION: &str =
-    "SELECT nombre, fecha_ingreso, diagnostico FROM pacientes WHERE departamento_id = 1 ORDER BY fecha_ingreso DESC";
-
 #[cfg(test)]
 mod tests {
     use super::super::*;
-    use super::TICKET_SOLUCION;
 
     /// Prueba de punta a punta del stack (Etapa 18/22): arranca Postgres
     /// embebido, y ejecuta window function, CTE recursivo y EXPLAIN reales —
@@ -235,9 +227,11 @@ mod tests {
             .expect("EXPLAIN debe ejecutar");
         assert!(!plan.rows.is_empty());
 
-        let jugador = run_query(&pool, TICKET_SOLUCION).await.unwrap();
-        let esperado = run_query(&pool, TICKET_SOLUCION).await.unwrap();
-        assert_eq!(jugador.rows, esperado.rows, "la solución del ticket debe pasar contra sí misma");
+        let query_de_referencia =
+            "SELECT nombre, fecha_ingreso, diagnostico FROM pacientes WHERE departamento_id = 1 ORDER BY fecha_ingreso DESC";
+        let jugador = run_query(&pool, query_de_referencia).await.unwrap();
+        let esperado = run_query(&pool, query_de_referencia).await.unwrap();
+        assert_eq!(jugador.rows, esperado.rows, "la misma query debe dar el mismo resultado ejecutada dos veces");
 
         pool.close().await;
         pg.stop().await.expect("Postgres debe detenerse limpiamente");

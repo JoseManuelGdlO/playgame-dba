@@ -1,7 +1,9 @@
 use super::{
     plantilla_depuracion, plantilla_reporte_agregado, plantilla_reporte_join_agregado,
-    plantilla_reporte_simple, Arquetipo, Ticket, TipoTicket,
+    plantilla_reporte_simple, Arquetipo, Ticket,
 };
+#[cfg(test)]
+use super::TipoTicket;
 
 pub(crate) fn catalogo() -> Vec<Ticket> {
     vec![
