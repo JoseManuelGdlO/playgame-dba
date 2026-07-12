@@ -1,8 +1,8 @@
 pub(crate) const DB_NAME: &str = "query_path_hospital_arcangel";
 
-/// Walking skeleton del esquema de Hospital Arcángel (Etapa 16): 6 tablas,
-/// suficientes para probar JOIN, agregación, window functions y CTE recursivo
-/// (jerarquía jefe_id) contra un Postgres real.
+/// Esquema de Hospital Arcángel (Etapa 16): 6 tablas, suficientes para probar
+/// JOIN, agregación, window functions y CTE recursivo (jerarquía jefe_id)
+/// contra un Postgres real.
 pub(crate) const SCHEMA_SQL: &str = r#"
 CREATE TABLE departamentos (
     id SERIAL PRIMARY KEY,
@@ -187,7 +187,7 @@ SELECT setval('tratamientos_id_seq', (SELECT max(id) FROM tratamientos));
 SELECT setval('habitaciones_id_seq', (SELECT max(id) FROM habitaciones));
 "#;
 
-/// El único ticket del walking skeleton (Etapa 14): rango Becario,
+/// El único ticket de Hospital Arcángel por ahora (Etapa 14): rango Becario,
 /// solo SELECT/WHERE/ORDER BY (Etapa 10).
 pub const TICKET_ENUNCIADO: &str = "Motivo: Contabilidad quiere saber quién ha pisado Cardiología últimamente.\nSolicitud: lista los pacientes admitidos en Cardiología (nombre, fecha de ingreso y diagnóstico), del más reciente al más antiguo.";
 
@@ -203,7 +203,7 @@ mod tests {
     /// embebido, y ejecuta window function, CTE recursivo y EXPLAIN reales —
     /// justo lo que SQLite no puede hacer y por lo que se eligió este stack.
     #[tokio::test]
-    async fn walking_skeleton_end_to_end() {
+    async fn hospital_arcangel_end_to_end() {
         let pg = init_embedded_postgres().await.expect("Postgres embebido debe arrancar");
         let pool = load_company(&pg, Company::HospitalArcangel)
             .await

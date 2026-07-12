@@ -1,6 +1,8 @@
 mod hospital_arcangel;
 mod postafeta;
 
+/// Hardcodeado a Hospital Arcángel — cuando el motor de tickets (Plan 2)
+/// generalice esto por empresa, este re-export debe volverse company-aware.
 pub use hospital_arcangel::TICKET_ENUNCIADO;
 
 use postgresql_embedded::{PostgreSQL, Settings};
@@ -14,6 +16,9 @@ use sqlx::{PgPool, Row};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Company {
     HospitalArcangel,
+    // Se construye desde lib.rs cuando el cambio de empresa (Etapa 11-G) esté
+    // implementado; por ahora solo se usa en tests.
+    #[allow(dead_code)]
     Postafeta,
 }
 
@@ -76,7 +81,7 @@ pub async fn load_company(pg: &PostgreSQL, company: Company) -> anyhow::Result<P
     Ok(pool)
 }
 
-/// Ejecuta SQL arbitrario escrito por el jugador. Alcance del spike (Etapa 14):
+/// Ejecuta SQL arbitrario escrito por el jugador. Alcance actual (Etapa 14):
 /// solo lectura — SELECT/CTE (incl. recursivo) y EXPLAIN.
 ///
 /// El texto viene del jugador, así que sqlx exige envolverlo en `AssertSqlSafe`
@@ -116,6 +121,8 @@ pub async fn run_query(pool: &PgPool, sql: &str) -> anyhow::Result<QueryResult> 
     Ok(QueryResult { rows })
 }
 
+/// Hardcodeado a Hospital Arcángel — cuando el motor de tickets (Plan 2)
+/// generalice esto por empresa, esta función debe volverse company-aware.
 pub async fn run_ticket_solution(pool: &PgPool) -> anyhow::Result<QueryResult> {
     run_query(pool, hospital_arcangel::TICKET_SOLUCION).await
 }

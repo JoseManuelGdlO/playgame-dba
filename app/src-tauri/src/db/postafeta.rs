@@ -1,5 +1,8 @@
 pub(crate) const DB_NAME: &str = "query_path_postafeta";
 
+/// Esquema de Postafeta: 5 tablas para una paquetería con presencia en 5
+/// ciudades — sucursales, empleados, clientes, paquetes e incidencias. Kevin,
+/// el becario invisible de Sistemas, termina firmando prácticamente todo.
 pub(crate) const SCHEMA_SQL: &str = r#"
 CREATE TABLE sucursales (
     id SERIAL PRIMARY KEY,
