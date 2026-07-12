@@ -12,11 +12,22 @@ pub struct Ticket {
     pub prioridad: Prioridad,
     pub costo_tiempo: u32,
     pub arquetipos: Vec<Arquetipo>,
+    /// Nunca debe llegar al cliente: es la respuesta correcta del puzzle.
+    #[serde(skip_serializing)]
     pub sql_dorada: String,
     pub sql_inicial: Option<String>,
     pub requiere_orden: bool,
+    // Ya no se serializan (no deben llegar al cliente) y aún no las lee
+    // ningún código de producción — solo los tests de este módulo — por lo
+    // que el análisis de código muerto las marcaría sin este allow.
+    #[serde(skip_serializing)]
+    #[allow(dead_code)]
     pub peso_correctitud: f64,
+    #[serde(skip_serializing)]
+    #[allow(dead_code)]
     pub peso_velocidad: f64,
+    #[serde(skip_serializing)]
+    #[allow(dead_code)]
     pub peso_practicas: f64,
 }
 

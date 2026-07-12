@@ -137,6 +137,10 @@ pub fn run() {
                 let pool = db::load_company(&pg, db::Company::HospitalArcangel)
                     .await
                     .expect("no se pudo cargar Hospital Arcángel");
+                // `pool` y `catalogo` deben cargarse siempre con la misma `Company`:
+                // `submit_ticket` valida el SQL del jugador (ejecutado contra `pool`)
+                // contra `sql_dorada` del ticket actual de `Tickets`, así que si
+                // alguna vez divergen, se validaría contra el esquema de otra empresa.
                 let catalogo = tickets::catalogo(db::Company::HospitalArcangel);
                 handle.manage(AppState { pool });
                 handle.manage(Perk(Mutex::new(PerkState::default())));
