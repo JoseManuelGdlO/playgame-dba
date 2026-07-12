@@ -26,4 +26,5 @@ postgresql_embedded = { version = "0.20.4", features = ["bundled", "tokio"] }
 sqlx = { version = "0.9.0", default-features = false, features = ["json", "postgres", "tls-rustls"] }
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros"] }
 anyhow = "1.0.103"
+sqlparser = "0.62"
 

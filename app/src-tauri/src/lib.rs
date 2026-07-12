@@ -1,4 +1,5 @@
 mod db;
+mod validation;
 
 use std::sync::Mutex;
 use tauri::Manager;
