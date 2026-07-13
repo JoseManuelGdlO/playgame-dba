@@ -96,7 +96,7 @@ pub(crate) fn mini_boss() -> Vec<Ticket> {
             prioridad: Prioridad::Urgente,
             costo_tiempo: 25,
             arquetipos: vec![Arquetipo::Join],
-            sql_dorada: "SELECT p.nombre, d.nombre AS departamento FROM pacientes p JOIN departamentos d ON p.departamento_id = d.id WHERE p.seguro_id = 5 ORDER BY p.nombre".to_string(),
+            sql_dorada: "SELECT p.nombre, d.nombre AS departamento FROM pacientes p JOIN departamentos d ON p.departamento_id = d.id JOIN seguros s ON s.id = p.seguro_id WHERE s.aseguradora = 'Sin seguro' ORDER BY p.nombre".to_string(),
             sql_inicial: None,
             requiere_orden: true,
             peso_correctitud: 0.5,
