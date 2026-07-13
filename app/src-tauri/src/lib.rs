@@ -39,6 +39,102 @@ struct EmbeddedPostgres(Mutex<Option<postgresql_embedded::PostgreSQL>>);
 /// del `.await` de la transición.
 struct TransicionEnCurso(std::sync::atomic::AtomicBool);
 
+/// Directorio de datos de la app (Etapa 11-G/Menú, Plan 9), resuelto una
+/// sola vez en `setup()` — ahí vive el único archivo de guardado.
+struct DirectorioGuardado(std::path::PathBuf);
+
+/// Todo lo que el Hub necesita pintar al entrar desde el Menú (Etapa
+/// 11-G/Menú, Plan 9): stats del jugador + el turno actual en una sola
+/// respuesta. `turno_actual`/`rango_actual` (Plan 7) siguen existiendo para
+/// los refrescos puntuales que ya hace el frontend en otros momentos.
+#[derive(serde::Serialize)]
+struct EstadoJuegoView {
+    dinero: i64,
+    reputacion: f64,
+    rango: tickets::Rango,
+    presupuesto_restante: u32,
+    pendientes: Vec<tickets::Ticket>,
+    fase: FaseArco,
+}
+
+impl EstadoJuegoView {
+    fn construir(jugador: &economia::EstadoJugador, manejado: &TurnoManejado) -> Self {
+        EstadoJuegoView {
+            dinero: jugador.dinero,
+            reputacion: jugador.reputacion,
+            rango: jugador.rango,
+            presupuesto_restante: manejado.actual.presupuesto_restante,
+            pendientes: manejado.actual.pendientes.clone(),
+            fase: manejado.fase,
+        }
+    }
+}
+
+/// Construye el estado de una partida nueva (Etapa 11-G/Menú, Plan 9):
+/// siempre Hospital Arcángel, Becario, dinero/reputación/perks en cero.
+/// Reutilizado tanto por `setup()` (estado por defecto al abrir la app) como
+/// por el comando `iniciar_partida` (el jugador decide empezar de cero a
+/// mitad de sesión).
+async fn estado_de_partida_nueva(
+    pg: &postgresql_embedded::PostgreSQL,
+) -> anyhow::Result<(sqlx::PgPool, economia::EstadoJugador, TurnoManejado)> {
+    let pool = db::load_company(pg, db::Company::HospitalArcangel).await?;
+    let catalogo = tickets::catalogo(db::Company::HospitalArcangel);
+    let jugador = economia::EstadoJugador::default();
+    let elegibles = tickets::tickets_elegibles(&catalogo, jugador.rango);
+    let (actual, indice_siguiente) = turno::EstadoTurno::nuevo(&elegibles, 0);
+    Ok((
+        pool,
+        jugador,
+        TurnoManejado {
+            catalogo,
+            indice_siguiente,
+            actual,
+            fase: FaseArco::TrabajoNormal,
+            empresa: db::Company::HospitalArcangel,
+        },
+    ))
+}
+
+/// Reconstruye el `Ticket` completo de cada id guardado (Etapa 11-G/Menú,
+/// Plan 9), buscándolo en el catálogo que corresponda según la fase: el
+/// catálogo completo de la empresa si `fase == TrabajoNormal`, o el lote del
+/// mini-boss si el jugador se había quedado a mitad de esa secuencia. Los
+/// ids que ya no aparezcan en el catálogo (no debería pasar en la práctica)
+/// se descartan en silencio en vez de fallar toda la carga.
+fn resolver_tickets_guardados(empresa: db::Company, fase: FaseArco, ids: &[String]) -> Vec<tickets::Ticket> {
+    let catalogo = if fase == FaseArco::TrabajoNormal {
+        tickets::catalogo(empresa)
+    } else {
+        tickets::mini_boss_hospital_arcangel()
+    };
+    ids.iter()
+        .filter_map(|id| catalogo.iter().find(|t| t.id == id).cloned())
+        .collect()
+}
+
+/// Autoguarda la partida completa (Etapa 11-G/Menú, Plan 9) — llamado tras
+/// `resolver_ticket`, `cerrar_dia`, `confirmar_transicion_agencia`, e
+/// `iniciar_partida`. Un fallo de guardado se ignora en silencio: perder un
+/// autosave puntual es preferible a que el jugador no pueda seguir jugando
+/// por un problema de disco.
+fn autoguardar(dir: &std::path::Path, jugador: &economia::EstadoJugador, manejado: &TurnoManejado) {
+    let partida = guardado::PartidaGuardada {
+        dinero: jugador.dinero,
+        reputacion: jugador.reputacion,
+        xp_por_arquetipo: jugador.xp_por_arquetipo.clone(),
+        rango: jugador.rango,
+        perks_desbloqueados: jugador.perks_desbloqueados.iter().map(|s| s.to_string()).collect(),
+        perks_equipados: jugador.perks_equipados.iter().map(|s| s.to_string()).collect(),
+        empresa: manejado.empresa,
+        fase: manejado.fase,
+        indice_siguiente: manejado.indice_siguiente,
+        presupuesto_restante: manejado.actual.presupuesto_restante,
+        pendientes_ids: manejado.actual.pendientes.iter().map(|t| t.id.to_string()).collect(),
+    };
+    let _ = guardado::guardar(dir, &partida);
+}
+
 /// Fase del arco de la empresa activa (Etapa 7/11-G, Plan 8): trabajo
 /// normal, el lote dedicado del mini-boss, o el arco ya completo (esperando
 /// que el jugador confirme la transición de la Agencia). Deliberadamente
@@ -53,13 +149,17 @@ enum FaseArco {
 
 /// El catálogo completo de la empresa activa, el índice de rotación para el
 /// próximo turno, el turno (bandeja) actual (Etapa 11-A) — reemplaza la
-/// selección round-robin simple de un solo "ticket actual" (Plan 3) — y la
-/// fase del arco de esa empresa (Etapa 7/11-G, Plan 8).
+/// selección round-robin simple de un solo "ticket actual" (Plan 3) — la
+/// fase del arco de esa empresa (Etapa 7/11-G, Plan 8), y qué empresa es esa
+/// (Etapa 11-G/Menú, Plan 9 — antes no había ninguna forma de leer "la
+/// empresa activa" como dato, solo el catálogo ya cargado; el guardado
+/// necesita poder persistirla).
 struct TurnoManejado {
     catalogo: Vec<tickets::Ticket>,
     indice_siguiente: usize,
     actual: turno::EstadoTurno,
     fase: FaseArco,
+    empresa: db::Company,
 }
 
 impl TurnoManejado {
@@ -199,6 +299,7 @@ async fn resolver_ticket(
     state: tauri::State<'_, AppState>,
     jugador: tauri::State<'_, Jugador>,
     turno_state: tauri::State<'_, Turno>,
+    dir: tauri::State<'_, DirectorioGuardado>,
     id: String,
     sql: String,
 ) -> Result<ScoreResult, String> {
@@ -231,6 +332,7 @@ async fn resolver_ticket(
 
     let mut manejado = turno_state.0.lock().unwrap();
     manejado.actualizar_fase(ascendio, &mut estado);
+    autoguardar(&dir.0, &estado, &manejado);
 
     Ok(ScoreResult {
         pass: evaluacion.correcta,
@@ -257,7 +359,11 @@ async fn resolver_ticket(
 }
 
 #[tauri::command]
-fn cerrar_dia(jugador: tauri::State<'_, Jugador>, turno_state: tauri::State<'_, Turno>) -> EstadoTurnoView {
+fn cerrar_dia(
+    jugador: tauri::State<'_, Jugador>,
+    turno_state: tauri::State<'_, Turno>,
+    dir: tauri::State<'_, DirectorioGuardado>,
+) -> EstadoTurnoView {
     let mut estado = jugador.0.lock().unwrap();
     let mut manejado = turno_state.0.lock().unwrap();
     // Etapa 7/11-G, Plan 8: cerrar el día no tiene sentido narrativo (ni
@@ -267,6 +373,7 @@ fn cerrar_dia(jugador: tauri::State<'_, Jugador>, turno_state: tauri::State<'_, 
     if manejado.fase == FaseArco::TrabajoNormal {
         manejado.escalar_y_avanzar(&mut estado);
     }
+    autoguardar(&dir.0, &estado, &manejado);
     EstadoTurnoView::from(&*manejado)
 }
 
@@ -292,6 +399,7 @@ async fn transicionar_a_empresa(
             indice_siguiente,
             actual,
             fase: FaseArco::TrabajoNormal,
+            empresa: company,
         },
     ))
 }
@@ -307,6 +415,7 @@ async fn confirmar_transicion_agencia(
     turno_state: tauri::State<'_, Turno>,
     embedded: tauri::State<'_, EmbeddedPostgres>,
     transicion: tauri::State<'_, TransicionEnCurso>,
+    dir: tauri::State<'_, DirectorioGuardado>,
 ) -> Result<EstadoTurnoView, String> {
     if transicion.0.swap(true, std::sync::atomic::Ordering::SeqCst) {
         return Err("Ya hay una transición de Agencia en curso.".to_string());
@@ -336,12 +445,113 @@ async fn confirmar_transicion_agencia(
         *state.0.lock().unwrap() = pool;
         *turno_state.0.lock().unwrap() = nuevo_manejado;
 
+        {
+            let estado = jugador.0.lock().unwrap();
+            let manejado = turno_state.0.lock().unwrap();
+            autoguardar(&dir.0, &estado, &manejado);
+        }
+
         Ok(EstadoTurnoView::from(&*turno_state.0.lock().unwrap()))
     }
     .await;
 
     transicion.0.store(false, std::sync::atomic::Ordering::SeqCst);
     resultado
+}
+
+#[tauri::command]
+fn existe_partida_guardada(dir: tauri::State<'_, DirectorioGuardado>) -> bool {
+    guardado::existe(&dir.0)
+}
+
+/// Empieza una partida nueva a mitad de sesión (Etapa 11-G/Menú, Plan 9):
+/// siempre Hospital Arcángel, Becario, dinero/reputación/perks en cero —
+/// reemplaza `AppState`/`Jugador`/`Turno` en caliente, mismo patrón que
+/// `confirmar_transicion_agencia` (Plan 8) ya usa para el pool.
+#[tauri::command]
+async fn iniciar_partida(
+    state: tauri::State<'_, AppState>,
+    jugador: tauri::State<'_, Jugador>,
+    turno_state: tauri::State<'_, Turno>,
+    embedded: tauri::State<'_, EmbeddedPostgres>,
+    dir: tauri::State<'_, DirectorioGuardado>,
+) -> Result<EstadoJuegoView, String> {
+    let pg = embedded
+        .0
+        .lock()
+        .unwrap()
+        .take()
+        .ok_or_else(|| "Postgres embebido no está disponible.".to_string())?;
+    let resultado = estado_de_partida_nueva(&pg).await;
+    embedded.0.lock().unwrap().replace(pg);
+    let (pool, jugador_nuevo, manejado_nuevo) = resultado.map_err(|e| e.to_string())?;
+
+    *jugador.0.lock().unwrap() = jugador_nuevo;
+    *state.0.lock().unwrap() = pool;
+    *turno_state.0.lock().unwrap() = manejado_nuevo;
+
+    let estado = jugador.0.lock().unwrap();
+    let manejado = turno_state.0.lock().unwrap();
+    autoguardar(&dir.0, &estado, &manejado);
+    Ok(EstadoJuegoView::construir(&estado, &manejado))
+}
+
+/// Carga el único slot de guardado (Etapa 11-G/Menú, Plan 9). Falla si no
+/// hay ningún guardado. Reconstruye los tickets pendientes por id contra el
+/// catálogo/mini-boss de la empresa guardada, y reemplaza
+/// `AppState`/`Jugador`/`Turno` en caliente.
+#[tauri::command]
+async fn cargar_partida(
+    state: tauri::State<'_, AppState>,
+    jugador: tauri::State<'_, Jugador>,
+    turno_state: tauri::State<'_, Turno>,
+    embedded: tauri::State<'_, EmbeddedPostgres>,
+    dir: tauri::State<'_, DirectorioGuardado>,
+) -> Result<EstadoJuegoView, String> {
+    let partida = guardado::cargar(&dir.0)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "No hay ninguna partida guardada.".to_string())?;
+
+    let pg = embedded
+        .0
+        .lock()
+        .unwrap()
+        .take()
+        .ok_or_else(|| "Postgres embebido no está disponible.".to_string())?;
+    let resultado_pool = db::load_company(&pg, partida.empresa).await;
+    embedded.0.lock().unwrap().replace(pg);
+    let pool = resultado_pool.map_err(|e| e.to_string())?;
+
+    let catalogo_completo = tickets::catalogo(partida.empresa);
+    let pendientes = resolver_tickets_guardados(partida.empresa, partida.fase, &partida.pendientes_ids);
+
+    let jugador_cargado = economia::EstadoJugador {
+        dinero: partida.dinero,
+        reputacion: partida.reputacion,
+        xp_por_arquetipo: partida.xp_por_arquetipo,
+        rango: partida.rango,
+        perks_desbloqueados: partida.perks_desbloqueados.iter().filter_map(|id| perks::buscar(id)).map(|p| p.id).collect(),
+        perks_equipados: partida.perks_equipados.iter().filter_map(|id| perks::buscar(id)).map(|p| p.id).collect(),
+    };
+
+    let manejado_cargado = TurnoManejado {
+        catalogo: catalogo_completo,
+        indice_siguiente: partida.indice_siguiente,
+        actual: turno::EstadoTurno {
+            presupuesto_restante: partida.presupuesto_restante,
+            pendientes,
+        },
+        fase: partida.fase,
+        empresa: partida.empresa,
+    };
+
+    *state.0.lock().unwrap() = pool;
+    *jugador.0.lock().unwrap() = jugador_cargado;
+    *turno_state.0.lock().unwrap() = manejado_cargado;
+
+    let estado = jugador.0.lock().unwrap();
+    let manejado = turno_state.0.lock().unwrap();
+    Ok(EstadoJuegoView::construir(&estado, &manejado))
 }
 
 #[tauri::command]
@@ -382,6 +592,9 @@ pub fn run() {
             resolver_ticket,
             cerrar_dia,
             confirmar_transicion_agencia,
+            existe_partida_guardada,
+            iniciar_partida,
+            cargar_partida,
             catalogo_perks,
             desbloquear_perk,
             equipar_perk,
@@ -389,34 +602,27 @@ pub fn run() {
         ])
         .setup(|app| {
             let handle = app.handle().clone();
+            let dir_guardado = handle
+                .path()
+                .app_data_dir()
+                .expect("no se pudo resolver el directorio de datos de la app");
             tauri::async_runtime::block_on(async move {
                 let pg = db::init_embedded_postgres()
                     .await
                     .expect("no se pudo inicializar Postgres embebido");
-                let pool = db::load_company(&pg, db::Company::HospitalArcangel)
+                // Estado por defecto al abrir la app (Etapa 11-G/Menú, Plan 9):
+                // el Menú decide si se queda así ("Iniciar partida", ya es el
+                // estado correcto) o lo reemplaza con un guardado ("Cargar
+                // partida", vía el comando `cargar_partida`).
+                let (pool, jugador_inicial, turno_inicial) = estado_de_partida_nueva(&pg)
                     .await
-                    .expect("no se pudo cargar Hospital Arcángel");
-                // `pool` y `catalogo` deben cargarse siempre con la misma `Company`:
-                // `resolver_ticket` valida el SQL del jugador (ejecutado contra
-                // `pool`) contra `sql_dorada` de un ticket de `Turno`, así que si
-                // alguna vez divergen, se validaría contra el esquema de otra empresa.
-                let catalogo = tickets::catalogo(db::Company::HospitalArcangel);
-                let jugador_inicial = economia::EstadoJugador::default();
-                // Etapa 10, Plan 7: el turno inicial ya se filtra por rango —
-                // un Becario recién llegado no debe ver tickets de
-                // Join/Agregación en su primera bandeja.
-                let elegibles = tickets::tickets_elegibles(&catalogo, jugador_inicial.rango);
-                let (turno_inicial, indice_siguiente) = turno::EstadoTurno::nuevo(&elegibles, 0);
+                    .expect("no se pudo iniciar la partida por defecto");
                 handle.manage(AppState(Mutex::new(pool)));
                 handle.manage(Jugador(Mutex::new(jugador_inicial)));
-                handle.manage(Turno(Mutex::new(TurnoManejado {
-                    catalogo,
-                    indice_siguiente,
-                    actual: turno_inicial,
-                    fase: FaseArco::TrabajoNormal,
-                })));
+                handle.manage(Turno(Mutex::new(turno_inicial)));
                 handle.manage(EmbeddedPostgres(Mutex::new(Some(pg))));
                 handle.manage(TransicionEnCurso(std::sync::atomic::AtomicBool::new(false)));
+                handle.manage(DirectorioGuardado(dir_guardado));
             });
             Ok(())
         })
@@ -470,6 +676,7 @@ mod tests {
             indice_siguiente,
             actual: turno_inicial,
             fase: FaseArco::TrabajoNormal,
+            empresa: db::Company::HospitalArcangel,
         };
         let mut jugador = economia::EstadoJugador {
             rango: Rango::AuxiliarDeSistemas,
@@ -499,6 +706,7 @@ mod tests {
             indice_siguiente,
             actual: turno_inicial,
             fase: FaseArco::TrabajoNormal,
+            empresa: db::Company::HospitalArcangel,
         };
         let mut jugador = economia::EstadoJugador::default();
 
@@ -525,6 +733,7 @@ mod tests {
             indice_siguiente: 0,
             actual: turno_vacio,
             fase: FaseArco::MiniBoss,
+            empresa: db::Company::HospitalArcangel,
         };
         let mut jugador = economia::EstadoJugador::default();
 
@@ -543,6 +752,7 @@ mod tests {
             indice_siguiente,
             actual: turno_vacio,
             fase: FaseArco::TrabajoNormal,
+            empresa: db::Company::HospitalArcangel,
         };
         let mut jugador = economia::EstadoJugador::default();
 
@@ -561,6 +771,7 @@ mod tests {
             indice_siguiente: 0,
             actual: turno_vacio,
             fase: FaseArco::ArcoCompletado,
+            empresa: db::Company::HospitalArcangel,
         };
         let mut jugador = economia::EstadoJugador::default();
 
