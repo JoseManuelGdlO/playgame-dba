@@ -249,4 +249,103 @@ mod tests {
         estado.reputacion = 500.0;
         assert!(estado.puede_ascender());
     }
+
+    #[test]
+    fn calcular_distingue_cual_peso_multiplica_a_cual_puntaje() {
+        // Pesos y puntajes todos distintos entre sí (y todos fracciones
+        // binarias exactas: 0.5 = 1/2, 0.3125 = 5/16, 0.1875 = 3/16, para que
+        // la aritmética de punto flotante no introduzca error de redondeo y
+        // el assert_eq! sobre f64 sea seguro). Con pesos iguales (como en
+        // evaluacion_perfecta) un bug que intercambiara dos pesos en la
+        // fórmula seguiría dando puntaje_base = 100 y pasaría todos los
+        // demás tests; aquí el resultado cambia bajo cualquier intercambio.
+        let mut ticket = ticket_de_prueba(vec![Arquetipo::Select]);
+        ticket.peso_correctitud = 0.5;
+        ticket.peso_velocidad = 0.3125;
+        ticket.peso_practicas = 0.1875;
+        let evaluacion = Evaluacion {
+            correcta: true,
+            puntaje_correctitud: 80.0,
+            puntaje_velocidad: 64.0,
+            puntaje_practicas: 32.0,
+            comentario_mentor: None,
+        };
+
+        let resultado = calcular(&evaluacion, &ticket, 1.0);
+
+        // puntaje_base = 80*0.5 + 64*0.3125 + 32*0.1875
+        //              = 40.0  + 20.0      + 6.0
+        //              = 66.0
+        //
+        // Si dos pesos se intercambiaran en la fórmula el resultado sería
+        // distinto en todos los casos:
+        //   - swap correctitud<->velocidad: 80*0.3125 + 64*0.5    + 32*0.1875 = 63.0
+        //   - swap correctitud<->practicas: 80*0.1875 + 64*0.3125 + 32*0.5    = 51.0
+        //   - swap velocidad<->practicas:   80*0.5    + 64*0.1875 + 32*0.3125 = 62.0
+        // ninguno coincide con 66.0, así que este test detectaría el bug.
+        assert_eq!(resultado.puntaje_base, 66.0);
+        assert_eq!(resultado.puntaje_final, 66.0);
+    }
+
+    #[test]
+    fn calcular_redondea_dinero_y_xp_cuando_el_puntaje_final_es_fraccionario() {
+        // Pesos y puntajes elegidos (todos fracciones binarias exactas:
+        // 0.625 = 5/8, 0.25 = 1/4, 0.125 = 1/8) para que puntaje_base dé un
+        // valor genuinamente fraccionario (no un entero ni un ".5" límite),
+        // ejercitando así el .round() real de dinero_ganado/xp_ganado que
+        // ningún otro test dispara (todos producen 100.0 o 200.0 exactos).
+        let mut ticket = ticket_de_prueba(vec![Arquetipo::Select]);
+        ticket.peso_correctitud = 0.625;
+        ticket.peso_velocidad = 0.25;
+        ticket.peso_practicas = 0.125;
+        let evaluacion = Evaluacion {
+            correcta: true,
+            puntaje_correctitud: 70.0,
+            puntaje_velocidad: 51.0,
+            puntaje_practicas: 11.0,
+            comentario_mentor: None,
+        };
+
+        let resultado = calcular(&evaluacion, &ticket, 1.0);
+
+        // puntaje_base = 70*0.625 + 51*0.25 + 11*0.125
+        //              = 43.75   + 12.75   + 1.375
+        //              = 57.875
+        assert_eq!(resultado.puntaje_base, 57.875);
+        assert_eq!(resultado.puntaje_final, 57.875);
+
+        // dinero_ganado = round(57.875 * valor_base(100) / 100) = round(57.875) = 58
+        assert_eq!(resultado.dinero_ganado, 58);
+
+        // xp Select (base 10) = round(10 * 57.875 / 100) = round(5.7875) = 6
+        assert_eq!(resultado.xp_ganado, vec![(Arquetipo::Select, 6)]);
+    }
+
+    #[test]
+    fn aplicar_resultado_agrega_arquetipo_nuevo_sin_afectar_los_existentes() {
+        let mut estado = EstadoJugador::default();
+        let resultado_select = Resultado {
+            puntaje_base: 100.0,
+            puntaje_final: 100.0,
+            dinero_ganado: 100,
+            reputacion_ganada: 0.5,
+            xp_ganado: vec![(Arquetipo::Select, 10)],
+        };
+        let resultado_join = Resultado {
+            puntaje_base: 100.0,
+            puntaje_final: 100.0,
+            dinero_ganado: 50,
+            reputacion_ganada: 0.3,
+            xp_ganado: vec![(Arquetipo::Join, 20)],
+        };
+
+        estado.aplicar_resultado(&resultado_select);
+        estado.aplicar_resultado(&resultado_join);
+
+        assert_eq!(
+            estado.xp_por_arquetipo,
+            vec![(Arquetipo::Select, 10), (Arquetipo::Join, 20)],
+            "la entrada existente de Select no debe alterarse y Join debe agregarse como nueva entrada"
+        );
+    }
 }
