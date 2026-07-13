@@ -18,12 +18,15 @@
         </div>
       </header>
 
-      <section class="ticket">
-        <h2>Ticket</h2>
-        <pre id="ticket-enunciado">cargando...</pre>
+      <section class="bandeja">
+        <h2>Bandeja — turno actual</h2>
+        <p>⏱️ Presupuesto de tiempo: <span id="presupuesto">0</span></p>
+        <ul id="lista-tickets"></ul>
+        <button id="btn-cerrar-dia">Cerrar día</button>
       </section>
 
       <section class="console">
+        <p id="ticket-activo-info">Elige un ticket de la bandeja para empezar.</p>
         <textarea id="sql-input" spellcheck="false" placeholder="SELECT * FROM pacientes;"></textarea>
         <div class="actions">
           <button id="btn-play">▶ Play</button>
@@ -47,5 +50,18 @@
         <div id="result-table"></div>
       </section>
     </main>
+
+    <div id="scoring-overlay" class="scoring-overlay oculto">
+      <div class="scoring-panel">
+        <h2 id="scoring-titulo">Resultado</h2>
+        <p>Correctitud: <span id="scoring-correctitud">0</span></p>
+        <p>Velocidad: <span id="scoring-velocidad">0</span></p>
+        <p>Buenas prácticas: <span id="scoring-practicas">0</span></p>
+        <p>💰 +<span id="scoring-dinero">0</span></p>
+        <p>⭐ +<span id="scoring-reputacion">0</span></p>
+        <p id="scoring-mentor"></p>
+        <button id="btn-cerrar-scoring">Cerrar</button>
+      </div>
+    </div>
   </body>
 </html>

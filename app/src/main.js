@@ -1,7 +1,11 @@
 const { invoke } = window.__TAURI__.core;
 
-let sqlInput, statusMsg, resultTable, dineroEl, reputacionEl, ticketEnunciado;
+let sqlInput, statusMsg, resultTable, dineroEl, reputacionEl;
 let perksSelect, perksEquipadosMsg;
+let presupuestoEl, listaTickets, ticketActivoInfo;
+let scoringOverlay;
+
+let ticketActivoId = null;
 
 function renderRows(rows) {
   resultTable.innerHTML = "";
@@ -41,10 +45,19 @@ function setStatus(text, kind) {
   statusMsg.className = kind || "";
 }
 
+function textoAEjecutar() {
+  const inicio = sqlInput.selectionStart;
+  const fin = sqlInput.selectionEnd;
+  if (inicio !== fin) {
+    return sqlInput.value.slice(inicio, fin);
+  }
+  return sqlInput.value;
+}
+
 async function runQuery() {
   setStatus("Ejecutando...", "");
   try {
-    const result = await invoke("run_query", { sql: sqlInput.value });
+    const result = await invoke("run_query", { sql: textoAEjecutar() });
     setStatus(`OK — ${result.rows.length} fila(s)`, "ok");
     renderRows(result.rows);
   } catch (err) {
@@ -53,13 +66,83 @@ async function runQuery() {
   }
 }
 
+function seleccionarTicket(ticket) {
+  ticketActivoId = ticket.id;
+  ticketActivoInfo.textContent = `Motivo: ${ticket.motivo}\nSolicitud: ${ticket.solicitud}`;
+  sqlInput.value = ticket.sql_inicial || "SELECT * FROM pacientes;";
+}
+
+function renderBandeja(estadoTurno) {
+  presupuestoEl.textContent = estadoTurno.presupuesto_restante;
+  listaTickets.innerHTML = "";
+  for (const ticket of estadoTurno.pendientes) {
+    const li = document.createElement("li");
+    const info = document.createElement("span");
+    info.textContent = `[⏱️ ${ticket.costo_tiempo}] ${ticket.motivo}`;
+    const boton = document.createElement("button");
+    boton.textContent = ticket.id === ticketActivoId ? "En curso" : "Trabajar en este";
+    boton.addEventListener("click", () => seleccionarTicket(ticket));
+    li.appendChild(info);
+    li.appendChild(boton);
+    listaTickets.appendChild(li);
+  }
+  if (!estadoTurno.pendientes.some((t) => t.id === ticketActivoId)) {
+    ticketActivoId = null;
+    ticketActivoInfo.textContent = "Elige un ticket de la bandeja para empezar.";
+  }
+}
+
+async function cargarTurno() {
+  const estadoTurno = await invoke("turno_actual");
+  renderBandeja(estadoTurno);
+}
+
+async function cerrarDia() {
+  const estadoTurno = await invoke("cerrar_dia");
+  ticketActivoId = null;
+  renderBandeja(estadoTurno);
+  setStatus("Día cerrado. Turno nuevo.", "ok");
+}
+
+function animarNumero(el, valorFinal, decimales) {
+  const duracionMs = 600;
+  const inicio = performance.now();
+  function paso(ahora) {
+    const progreso = Math.min((ahora - inicio) / duracionMs, 1);
+    el.textContent = (valorFinal * progreso).toFixed(decimales);
+    if (progreso < 1) {
+      requestAnimationFrame(paso);
+    } else {
+      el.textContent = valorFinal.toFixed(decimales);
+    }
+  }
+  requestAnimationFrame(paso);
+}
+
+function mostrarScoring(score) {
+  document.querySelector("#scoring-titulo").textContent = score.pass ? "✅ Resuelto" : "❌ Incorrecto";
+  animarNumero(document.querySelector("#scoring-correctitud"), score.puntaje_correctitud, 0);
+  animarNumero(document.querySelector("#scoring-velocidad"), score.puntaje_velocidad, 0);
+  animarNumero(document.querySelector("#scoring-practicas"), score.puntaje_practicas, 0);
+  animarNumero(document.querySelector("#scoring-dinero"), score.dinero_ganado, 0);
+  animarNumero(document.querySelector("#scoring-reputacion"), score.reputacion_ganada, 1);
+  document.querySelector("#scoring-mentor").textContent = score.comentario_mentor || "";
+  scoringOverlay.classList.remove("oculto");
+}
+
 async function submitTicket() {
+  if (!ticketActivoId) {
+    setStatus("Elige un ticket de la bandeja primero.", "error");
+    return;
+  }
   setStatus("Enviando ticket...", "");
   try {
-    const score = await invoke("submit_ticket", { sql: sqlInput.value });
+    const score = await invoke("resolver_ticket", { id: ticketActivoId, sql: sqlInput.value });
     dineroEl.textContent = score.dinero_total;
     reputacionEl.textContent = score.reputacion_total.toFixed(1);
+    mostrarScoring(score);
     setStatus(score.mensaje, score.pass ? "ok" : "error");
+    await cargarTurno();
   } catch (err) {
     setStatus(String(err), "error");
   }
@@ -118,18 +201,20 @@ window.addEventListener("DOMContentLoaded", async () => {
   resultTable = document.querySelector("#result-table");
   dineroEl = document.querySelector("#dinero");
   reputacionEl = document.querySelector("#reputacion");
-  ticketEnunciado = document.querySelector("#ticket-enunciado");
   perksSelect = document.querySelector("#perks-select");
   perksEquipadosMsg = document.querySelector("#perks-equipados-msg");
+  presupuestoEl = document.querySelector("#presupuesto");
+  listaTickets = document.querySelector("#lista-tickets");
+  ticketActivoInfo = document.querySelector("#ticket-activo-info");
+  scoringOverlay = document.querySelector("#scoring-overlay");
 
-  const ticket = await invoke("ticket_actual");
-  ticketEnunciado.textContent = `Motivo: ${ticket.motivo}\nSolicitud: ${ticket.solicitud}`;
-  sqlInput.value = ticket.sql_inicial || "SELECT * FROM pacientes;";
-
+  await cargarTurno();
   await cargarPerks();
 
   document.querySelector("#btn-play").addEventListener("click", runQuery);
   document.querySelector("#btn-submit").addEventListener("click", submitTicket);
+  document.querySelector("#btn-cerrar-dia").addEventListener("click", cerrarDia);
+  document.querySelector("#btn-cerrar-scoring").addEventListener("click", () => scoringOverlay.classList.add("oculto"));
   document.querySelector("#btn-unlock-perk").addEventListener("click", desbloquearPerkSeleccionado);
   document.querySelector("#btn-equip-perk").addEventListener("click", equiparODesequiparPerkSeleccionado);
 });
