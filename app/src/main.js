@@ -4,6 +4,14 @@ let sqlInput, statusMsg, resultTable, dineroEl, reputacionEl, rangoEl;
 let perksSelect, perksEquipadosMsg;
 let presupuestoEl, listaTickets, ticketActivoInfo, bandejaTitulo;
 let scoringOverlay, scoringAscenso, agenciaOverlay;
+let pantallaMenu, appShell, pantallaHub, pantallaConsola, btnCargarPartida;
+
+function mostrarPantalla(nombre) {
+  pantallaMenu.classList.toggle("oculto", nombre !== "menu");
+  appShell.classList.toggle("oculto", nombre === "menu");
+  pantallaHub.classList.toggle("oculto", nombre !== "hub");
+  pantallaConsola.classList.toggle("oculto", nombre !== "consola");
+}
 
 const TITULO_FASE = {
   MiniBoss: "El Auditor de Cumplimiento quiere verte",
@@ -83,6 +91,7 @@ function seleccionarTicket(ticket) {
   ticketActivoId = ticket.id;
   ticketActivoInfo.textContent = `Motivo: ${ticket.motivo}\nSolicitud: ${ticket.solicitud}`;
   sqlInput.value = ticket.sql_inicial || "SELECT * FROM pacientes;";
+  mostrarPantalla("consola");
 }
 
 function renderBandeja(estadoTurno) {
@@ -114,9 +123,37 @@ async function cargarTurno() {
   renderBandeja(estadoTurno);
 }
 
-async function cargarRango() {
-  const rango = await invoke("rango_actual");
-  renderRango(rango);
+function pintarHubDesdeEstadoJuego(estadoJuego) {
+  dineroEl.textContent = estadoJuego.dinero;
+  reputacionEl.textContent = estadoJuego.reputacion.toFixed(1);
+  renderRango(estadoJuego.rango);
+  renderBandeja(estadoJuego);
+  ticketActivoId = null;
+  mostrarPantalla("hub");
+}
+
+async function mostrarMenu() {
+  mostrarPantalla("menu");
+  const existePartida = await invoke("existe_partida_guardada");
+  btnCargarPartida.disabled = !existePartida;
+}
+
+async function iniciarPartida() {
+  const estadoJuego = await invoke("iniciar_partida");
+  pintarHubDesdeEstadoJuego(estadoJuego);
+  await cargarPerks();
+  setStatus("Partida nueva iniciada.", "ok");
+}
+
+async function cargarPartida() {
+  try {
+    const estadoJuego = await invoke("cargar_partida");
+    pintarHubDesdeEstadoJuego(estadoJuego);
+    await cargarPerks();
+    setStatus("Partida cargada.", "ok");
+  } catch (err) {
+    setStatus(String(err), "error");
+  }
 }
 
 async function cerrarDia() {
@@ -250,16 +287,29 @@ window.addEventListener("DOMContentLoaded", async () => {
   scoringOverlay = document.querySelector("#scoring-overlay");
   scoringAscenso = document.querySelector("#scoring-ascenso");
   agenciaOverlay = document.querySelector("#agencia-overlay");
+  pantallaMenu = document.querySelector("#pantalla-menu");
+  appShell = document.querySelector("#app-shell");
+  pantallaHub = document.querySelector("#pantalla-hub");
+  pantallaConsola = document.querySelector("#pantalla-consola");
+  btnCargarPartida = document.querySelector("#btn-cargar-partida");
 
-  await cargarTurno();
-  await cargarRango();
-  await cargarPerks();
+  await mostrarMenu();
 
   document.querySelector("#btn-play").addEventListener("click", runQuery);
   document.querySelector("#btn-submit").addEventListener("click", submitTicket);
   document.querySelector("#btn-cerrar-dia").addEventListener("click", cerrarDia);
-  document.querySelector("#btn-cerrar-scoring").addEventListener("click", () => scoringOverlay.classList.add("oculto"));
+  document.querySelector("#btn-cerrar-scoring").addEventListener("click", () => {
+    scoringOverlay.classList.add("oculto");
+    mostrarPantalla("hub");
+  });
   document.querySelector("#btn-unlock-perk").addEventListener("click", desbloquearPerkSeleccionado);
   document.querySelector("#btn-equip-perk").addEventListener("click", equiparODesequiparPerkSeleccionado);
   document.querySelector("#btn-confirmar-agencia").addEventListener("click", confirmarTransicionAgencia);
+  document.querySelector("#btn-iniciar-partida").addEventListener("click", iniciarPartida);
+  document.querySelector("#btn-cargar-partida").addEventListener("click", cargarPartida);
+  document.querySelector("#btn-volver-hub").addEventListener("click", () => {
+    ticketActivoId = null;
+    ticketActivoInfo.textContent = "Elige un ticket de la bandeja para empezar.";
+    mostrarPantalla("hub");
+  });
 });
