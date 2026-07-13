@@ -1,4 +1,5 @@
 mod db;
+mod economia;
 mod tickets;
 mod validation;
 
@@ -68,15 +69,18 @@ async fn submit_ticket(
     sql: String,
 ) -> Result<ScoreResult, String> {
     let indice = *tickets.indice_actual.lock().unwrap();
-    let sql_dorada = tickets.catalogo[indice].sql_dorada.clone();
-    let requiere_orden = tickets.catalogo[indice].requiere_orden;
+    let ticket = &tickets.catalogo[indice];
+    let sql_dorada = ticket.sql_dorada.clone();
+    let requiere_orden = ticket.requiere_orden;
 
     let evaluacion = validation::evaluar_entrega(&state.pool, &sql, &sql_dorada, requiere_orden)
         .await
         .map_err(|e| e.to_string())?;
 
+    let resultado = economia::calcular(&evaluacion, ticket, 1.0);
+    let dinero_ganado = resultado.dinero_ganado as i64;
+
     let mut perk_state = perk.0.lock().unwrap();
-    let dinero_ganado = if evaluacion.correcta { 500 } else { 0 };
     perk_state.dinero += dinero_ganado;
 
     if evaluacion.correcta {

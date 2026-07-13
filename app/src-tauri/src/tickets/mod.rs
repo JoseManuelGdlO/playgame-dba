@@ -17,27 +17,19 @@ pub struct Ticket {
     pub sql_dorada: String,
     pub sql_inicial: Option<String>,
     pub requiere_orden: bool,
-    // Ya no se serializan (no deben llegar al cliente) y aún no las lee
-    // ningún código de producción — solo los tests de este módulo — por lo
-    // que el análisis de código muerto las marcaría sin este allow.
     #[serde(skip_serializing)]
-    #[allow(dead_code)]
     pub peso_correctitud: f64,
     #[serde(skip_serializing)]
-    #[allow(dead_code)]
     pub peso_velocidad: f64,
     #[serde(skip_serializing)]
-    #[allow(dead_code)]
     pub peso_practicas: f64,
     /// Valor base de dinero (Etapa 12) — sube con prioridad/complejidad del
     /// ticket. Dato interno de la fórmula de economía, sin uso del lado del
     /// cliente.
     #[serde(skip_serializing)]
-    #[allow(dead_code)]
     pub valor_base: i64,
     /// Factor de reputación (Etapa 12) — mayor en tickets de mayor exigencia.
     #[serde(skip_serializing)]
-    #[allow(dead_code)]
     pub factor_reputacion: f64,
 }
 
