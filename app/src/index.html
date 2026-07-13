@@ -20,7 +20,7 @@
       </header>
 
       <section class="bandeja">
-        <h2>Bandeja — turno actual</h2>
+        <h2 id="bandeja-titulo">Bandeja — turno actual</h2>
         <p>⏱️ Presupuesto de tiempo: <span id="presupuesto">0</span></p>
         <ul id="lista-tickets"></ul>
         <button id="btn-cerrar-dia">Cerrar día</button>
@@ -63,6 +63,15 @@
         <p id="scoring-mentor"></p>
         <p id="scoring-ascenso"></p>
         <button id="btn-cerrar-scoring">Cerrar</button>
+      </div>
+    </div>
+
+    <div id="agencia-overlay" class="scoring-overlay oculto">
+      <div class="scoring-panel">
+        <h2>Grupo Ómega RH — Reasignación</h2>
+        <p>Has superado al Auditor de Cumplimiento. Tu siguiente asignación:</p>
+        <p><strong>Postafeta</strong> — todo el Slack de la empresa lo administra un becario invisible llamado Kevin; todo viene firmado "- Kevin".</p>
+        <button id="btn-confirmar-agencia">Aceptar reasignación</button>
       </div>
     </div>
   </body>

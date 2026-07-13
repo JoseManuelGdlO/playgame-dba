@@ -2,8 +2,12 @@ const { invoke } = window.__TAURI__.core;
 
 let sqlInput, statusMsg, resultTable, dineroEl, reputacionEl, rangoEl;
 let perksSelect, perksEquipadosMsg;
-let presupuestoEl, listaTickets, ticketActivoInfo;
-let scoringOverlay, scoringAscenso;
+let presupuestoEl, listaTickets, ticketActivoInfo, bandejaTitulo;
+let scoringOverlay, scoringAscenso, agenciaOverlay;
+
+const TITULO_FASE = {
+  MiniBoss: "El Auditor de Cumplimiento quiere verte",
+};
 
 const NOMBRE_RANGO = {
   Becario: "Becario",
@@ -83,6 +87,7 @@ function seleccionarTicket(ticket) {
 
 function renderBandeja(estadoTurno) {
   presupuestoEl.textContent = estadoTurno.presupuesto_restante;
+  bandejaTitulo.textContent = TITULO_FASE[estadoTurno.fase] || "Bandeja — turno actual";
   listaTickets.innerHTML = "";
   for (const ticket of estadoTurno.pendientes) {
     const li = document.createElement("li");
@@ -98,6 +103,9 @@ function renderBandeja(estadoTurno) {
   if (!estadoTurno.pendientes.some((t) => t.id === ticketActivoId)) {
     ticketActivoId = null;
     ticketActivoInfo.textContent = "Elige un ticket de la bandeja para empezar.";
+  }
+  if (estadoTurno.fase === "ArcoCompletado") {
+    agenciaOverlay.classList.remove("oculto");
   }
 }
 
@@ -116,6 +124,19 @@ async function cerrarDia() {
   ticketActivoId = null;
   renderBandeja(estadoTurno);
   setStatus("Día cerrado. Turno nuevo.", "ok");
+}
+
+async function confirmarTransicionAgencia() {
+  try {
+    const estadoTurno = await invoke("confirmar_transicion_agencia");
+    reputacionEl.textContent = "0.0";
+    agenciaOverlay.classList.add("oculto");
+    ticketActivoId = null;
+    renderBandeja(estadoTurno);
+    setStatus("Bienvenido a Postafeta.", "ok");
+  } catch (err) {
+    setStatus(String(err), "error");
+  }
 }
 
 function animarNumero(el, valorFinal, decimales) {
@@ -225,8 +246,10 @@ window.addEventListener("DOMContentLoaded", async () => {
   presupuestoEl = document.querySelector("#presupuesto");
   listaTickets = document.querySelector("#lista-tickets");
   ticketActivoInfo = document.querySelector("#ticket-activo-info");
+  bandejaTitulo = document.querySelector("#bandeja-titulo");
   scoringOverlay = document.querySelector("#scoring-overlay");
   scoringAscenso = document.querySelector("#scoring-ascenso");
+  agenciaOverlay = document.querySelector("#agencia-overlay");
 
   await cargarTurno();
   await cargarRango();
@@ -238,4 +261,5 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.querySelector("#btn-cerrar-scoring").addEventListener("click", () => scoringOverlay.classList.add("oculto"));
   document.querySelector("#btn-unlock-perk").addEventListener("click", desbloquearPerkSeleccionado);
   document.querySelector("#btn-equip-perk").addEventListener("click", equiparODesequiparPerkSeleccionado);
+  document.querySelector("#btn-confirmar-agencia").addEventListener("click", confirmarTransicionAgencia);
 });
