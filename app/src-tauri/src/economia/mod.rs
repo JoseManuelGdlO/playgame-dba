@@ -1,5 +1,5 @@
 use crate::perks::{Efecto, Perk};
-use crate::tickets::{Arquetipo, Ticket};
+use crate::tickets::{Arquetipo, Rango, Ticket};
 use crate::validation::Evaluacion;
 
 /// Puntos de XP que otorga usar cada arquetipo SQL una vez, antes de escalar
@@ -82,32 +82,32 @@ pub fn calcular(
     }
 }
 
-/// Máximo de perks equipados simultáneamente (Etapa 19, MVP): 2 slots fijos.
-/// La escalera de hasta 7 slots por hito de rango (Etapa 13 completa) es de
-/// un plan posterior.
-const MAX_SLOTS_EQUIPADOS: usize = 2;
-
 /// Estado acumulado del jugador (Etapa 12/13): dinero, reputación, XP por
-/// arquetipo, y los perks desbloqueados/equipados.
+/// arquetipo, rango de carrera, y los perks desbloqueados/equipados.
 #[derive(Debug, Clone, Default)]
 pub struct EstadoJugador {
     pub dinero: i64,
     pub reputacion: f64,
     pub xp_por_arquetipo: Vec<(Arquetipo, i64)>,
+    pub rango: Rango,
     pub perks_desbloqueados: Vec<&'static str>,
     pub perks_equipados: Vec<&'static str>,
 }
 
 /// Umbral de reputación para ascender de Becario a Auxiliar de Sistemas en
-/// Hospital Arcángel (Etapa 10). El ascenso real (superar el mini-boss,
-/// cambiar de rango) es responsabilidad de un plan posterior — esta
-/// constante solo define cuándo se cumple la condición de reputación.
+/// Hospital Arcángel (Etapa 10). El ascenso de este plan usa únicamente esta
+/// condición — el mini-boss de la empresa (Etapa 11-G) queda fuera de
+/// alcance y se puede añadir como condición adicional en un plan posterior
+/// sin romper esta lógica (Plan 7).
 const UMBRAL_ASCENSO_AUXILIAR: f64 = 500.0;
 
 impl EstadoJugador {
     /// Aplica el resultado de una entrega (Etapa 12): acumula dinero,
-    /// reputación y XP por arquetipo sobre el estado existente.
-    pub fn aplicar_resultado(&mut self, resultado: &Resultado) {
+    /// reputación y XP por arquetipo sobre el estado existente, y dispara el
+    /// ascenso automático de rango si la reputación acumulada ya cruzó el
+    /// umbral (Etapa 10, Plan 7). Devuelve `true` solo en la entrega exacta
+    /// en la que el ascenso ocurre, para que el llamador pueda anunciarlo.
+    pub fn aplicar_resultado(&mut self, resultado: &Resultado) -> bool {
         self.dinero += resultado.dinero_ganado;
         self.reputacion += resultado.reputacion_ganada;
         for &(arquetipo, xp) in &resultado.xp_ganado {
@@ -116,12 +116,29 @@ impl EstadoJugador {
                 None => self.xp_por_arquetipo.push((arquetipo, xp)),
             }
         }
+        if self.rango == Rango::Becario && self.puede_ascender() {
+            self.rango = Rango::AuxiliarDeSistemas;
+            true
+        } else {
+            false
+        }
     }
 
     /// Etapa 10: señal de que la reputación ya cruzó el umbral de ascenso —
     /// no dispara ningún cambio de estado por sí sola.
     pub fn puede_ascender(&self) -> bool {
         self.reputacion >= UMBRAL_ASCENSO_AUXILIAR
+    }
+
+    /// Máximo de perks equipados simultáneamente (Etapa 13, Plan 7): 2 slots
+    /// para Becario, 3 para Auxiliar de Sistemas (hito de slot de esa
+    /// etapa). La escalera completa de hasta 7 slots por rango es de un plan
+    /// posterior, junto con más rangos (Fase 1+).
+    pub fn max_slots(&self) -> usize {
+        match self.rango {
+            Rango::Becario => 2,
+            Rango::AuxiliarDeSistemas => 3,
+        }
     }
 
     /// Aplica una penalización de reputación (Etapa 11-A: tickets escalados
@@ -166,8 +183,9 @@ impl EstadoJugador {
     }
 
     /// Equipa un perk ya desbloqueado (Etapa 11-D: equipar es gratis).
-    /// Falla si no está desbloqueado, o si ya se ocuparon los 2 slots.
-    /// Idempotente si ya estaba equipado.
+    /// Falla si no está desbloqueado, o si ya se ocuparon los slots
+    /// disponibles para el rango actual (Etapa 13, Plan 7). Idempotente si
+    /// ya estaba equipado.
     pub fn equipar_perk(&mut self, id: &str) -> Result<(), String> {
         if !self.perks_desbloqueados.contains(&id) {
             return Err(format!("'{id}' no está desbloqueado todavía."));
@@ -175,10 +193,9 @@ impl EstadoJugador {
         if self.perks_equipados.contains(&id) {
             return Ok(());
         }
-        if self.perks_equipados.len() >= MAX_SLOTS_EQUIPADOS {
-            return Err(format!(
-                "Ya tienes {MAX_SLOTS_EQUIPADOS} perks equipados — desequipa uno primero."
-            ));
+        let max_slots = self.max_slots();
+        if self.perks_equipados.len() >= max_slots {
+            return Err(format!("Ya tienes {max_slots} perks equipados — desequipa uno primero."));
         }
         let id_estatico = self
             .perks_desbloqueados
@@ -617,5 +634,55 @@ mod tests {
             1.2,
             "solo buena_fama afecta reputación"
         );
+    }
+
+    #[test]
+    fn aplicar_resultado_asciende_a_auxiliar_al_cruzar_el_umbral_una_sola_vez() {
+        let mut estado = EstadoJugador::default();
+        assert_eq!(estado.rango, Rango::Becario);
+        let resultado = Resultado {
+            puntaje_base: 100.0,
+            puntaje_final: 100.0,
+            dinero_ganado: 100,
+            reputacion_ganada: 500.0,
+            xp_ganado: vec![],
+        };
+
+        let ascendio = estado.aplicar_resultado(&resultado);
+
+        assert!(ascendio, "debe ascender en la entrega exacta que cruza el umbral");
+        assert_eq!(estado.rango, Rango::AuxiliarDeSistemas);
+
+        let resultado_siguiente = Resultado {
+            puntaje_base: 100.0,
+            puntaje_final: 100.0,
+            dinero_ganado: 50,
+            reputacion_ganada: 10.0,
+            xp_ganado: vec![],
+        };
+        let ascendio_de_nuevo = estado.aplicar_resultado(&resultado_siguiente);
+        assert!(!ascendio_de_nuevo, "ya ascendido, no debe volver a dispararse");
+    }
+
+    #[test]
+    fn max_slots_es_2_para_becario_y_3_para_auxiliar_de_sistemas() {
+        let mut estado = EstadoJugador::default();
+        assert_eq!(estado.max_slots(), 2);
+
+        estado.rango = Rango::AuxiliarDeSistemas;
+        assert_eq!(estado.max_slots(), 3);
+    }
+
+    #[test]
+    fn equipar_perk_permite_un_tercer_slot_para_auxiliar_de_sistemas() {
+        let mut estado = EstadoJugador::default();
+        estado.rango = Rango::AuxiliarDeSistemas;
+        estado.perks_desbloqueados = vec!["instinto", "rayos_x", "piloto_automatico"];
+
+        estado.equipar_perk("instinto").unwrap();
+        estado.equipar_perk("rayos_x").unwrap();
+        estado.equipar_perk("piloto_automatico").unwrap();
+
+        assert_eq!(estado.perks_equipados, vec!["instinto", "rayos_x", "piloto_automatico"]);
     }
 }
