@@ -320,7 +320,7 @@ tr:nth-child(even) td {
 .scoring-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(17, 17, 27, 0.85);
+  background: linear-gradient(160deg, rgba(42, 42, 31, 0.92), rgba(28, 28, 21, 0.92));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -331,10 +331,6 @@ tr:nth-child(even) td {
 }
 
 .scoring-panel {
-  background: #1e1e2e;
-  border: 1px solid #45475a;
-  border-radius: 12px;
-  padding: 1.5rem 2rem;
   min-width: 280px;
   text-align: center;
 }

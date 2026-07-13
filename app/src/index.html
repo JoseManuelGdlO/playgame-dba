@@ -79,25 +79,41 @@
     </div>
 
     <div id="scoring-overlay" class="scoring-overlay oculto">
-      <div class="scoring-panel">
-        <h2 id="scoring-titulo">Resultado</h2>
-        <p>Correctitud: <span id="scoring-correctitud">0</span></p>
-        <p>Velocidad: <span id="scoring-velocidad">0</span></p>
-        <p>Buenas prácticas: <span id="scoring-practicas">0</span></p>
-        <p>💰 +<span id="scoring-dinero">0</span></p>
-        <p>⭐ +<span id="scoring-reputacion">0</span></p>
-        <p id="scoring-mentor"></p>
-        <p id="scoring-ascenso"></p>
-        <button id="btn-cerrar-scoring">Cerrar</button>
+      <div class="ventana-terminal">
+        <div class="ventana-terminal-barra">
+          <span class="ventana-terminal-punto rojo"></span>
+          <span class="ventana-terminal-punto amarillo"></span>
+          <span class="ventana-terminal-punto verde"></span>
+          <span class="ventana-terminal-titulo">query-path — resultado</span>
+        </div>
+        <div class="ventana-terminal-cuerpo scoring-panel">
+          <h2 id="scoring-titulo">Resultado</h2>
+          <p>Correctitud: <span id="scoring-correctitud">0</span></p>
+          <p>Velocidad: <span id="scoring-velocidad">0</span></p>
+          <p>Buenas prácticas: <span id="scoring-practicas">0</span></p>
+          <p>💰 +<span id="scoring-dinero">0</span></p>
+          <p>⭐ +<span id="scoring-reputacion">0</span></p>
+          <p id="scoring-mentor"></p>
+          <p id="scoring-ascenso"></p>
+          <button id="btn-cerrar-scoring">Cerrar</button>
+        </div>
       </div>
     </div>
 
     <div id="agencia-overlay" class="scoring-overlay oculto">
-      <div class="scoring-panel">
-        <h2>Grupo Ómega RH — Reasignación</h2>
-        <p>Has superado al Auditor de Cumplimiento. Tu siguiente asignación:</p>
-        <p><strong>Postafeta</strong> — todo el Slack de la empresa lo administra un becario invisible llamado Kevin; todo viene firmado "- Kevin".</p>
-        <button id="btn-confirmar-agencia">Aceptar reasignación</button>
+      <div class="ventana-terminal">
+        <div class="ventana-terminal-barra">
+          <span class="ventana-terminal-punto rojo"></span>
+          <span class="ventana-terminal-punto amarillo"></span>
+          <span class="ventana-terminal-punto verde"></span>
+          <span class="ventana-terminal-titulo">query-path — agencia</span>
+        </div>
+        <div class="ventana-terminal-cuerpo scoring-panel">
+          <h2>Grupo Ómega RH — Reasignación</h2>
+          <p>Has superado al Auditor de Cumplimiento. Tu siguiente asignación:</p>
+          <p><strong>Postafeta</strong> — todo el Slack de la empresa lo administra un becario invisible llamado Kevin; todo viene firmado "- Kevin".</p>
+          <button id="btn-confirmar-agencia">Aceptar reasignación</button>
+        </div>
       </div>
     </div>
   </body>
