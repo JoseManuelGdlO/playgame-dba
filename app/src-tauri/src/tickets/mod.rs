@@ -57,6 +57,30 @@ pub enum Arquetipo {
     Agregacion,
 }
 
+/// Rango de carrera del jugador (Etapa 10, Plan 7): determina qué tickets
+/// del catálogo puede recibir en su bandeja. El orden de declaración importa
+/// — el derive de `Ord` decide qué rango "alcanza" a cuál según ese orden.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, serde::Serialize)]
+pub enum Rango {
+    #[default]
+    Becario,
+    AuxiliarDeSistemas,
+}
+
+/// Etapa 10/Plan 7: un ticket requiere Auxiliar de Sistemas si su solución
+/// necesita JOIN o agregación — Becario solo domina SELECT/WHERE/ORDER BY.
+pub fn rango_requerido(ticket: &Ticket) -> Rango {
+    let necesita_auxiliar = ticket
+        .arquetipos
+        .iter()
+        .any(|a| matches!(a, Arquetipo::Join | Arquetipo::Agregacion));
+    if necesita_auxiliar {
+        Rango::AuxiliarDeSistemas
+    } else {
+        Rango::Becario
+    }
+}
+
 /// Plantilla "reporte simple": filtra y ordena una tabla por una columna,
 /// sin JOIN ni agregación (Becario: SELECT/WHERE/ORDER BY, Etapa 10).
 fn plantilla_reporte_simple(
@@ -294,5 +318,38 @@ mod tests {
             "Plan 7 agrega 2 tickets Select-only para que Becario tenga bandeja"
         );
         assert_eq!(catalogo(crate::db::Company::Postafeta).len(), 6);
+    }
+
+    #[test]
+    fn rango_becario_es_menor_que_auxiliar_de_sistemas() {
+        assert!(Rango::Becario < Rango::AuxiliarDeSistemas);
+    }
+
+    #[test]
+    fn rango_requerido_es_becario_para_tickets_solo_select() {
+        let ticket = plantilla_reporte_simple("id_becario", "Alguien", "un motivo", "una solicitud", "SELECT 1", 10);
+        assert_eq!(rango_requerido(&ticket), Rango::Becario);
+    }
+
+    #[test]
+    fn rango_requerido_es_auxiliar_si_incluye_join_o_agregacion() {
+        let con_join = plantilla_reporte_join("id_join", "Alguien", "un motivo", "una solicitud", "SELECT 1", 10);
+        let con_agregacion =
+            plantilla_reporte_agregado("id_agg", "Alguien", "un motivo", "una solicitud", "SELECT 1", 10);
+        let con_ambos =
+            plantilla_reporte_join_agregado("id_both", "Alguien", "un motivo", "una solicitud", "SELECT 1", 10);
+
+        assert_eq!(rango_requerido(&con_join), Rango::AuxiliarDeSistemas);
+        assert_eq!(rango_requerido(&con_agregacion), Rango::AuxiliarDeSistemas);
+        assert_eq!(rango_requerido(&con_ambos), Rango::AuxiliarDeSistemas);
+    }
+
+    #[test]
+    fn catalogo_de_hospital_arcangel_tiene_3_tickets_elegibles_para_becario() {
+        let elegibles = catalogo(crate::db::Company::HospitalArcangel)
+            .into_iter()
+            .filter(|t| rango_requerido(t) <= Rango::Becario)
+            .count();
+        assert_eq!(elegibles, 3, "el ticket original de Select + los 2 agregados en la Tarea 1");
     }
 }
