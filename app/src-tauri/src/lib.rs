@@ -29,6 +29,15 @@ struct Jugador(Mutex<economia::EstadoJugador>);
 /// Mantiene vivo el servidor Postgres embebido y permite detenerlo al salir.
 struct EmbeddedPostgres(Mutex<Option<postgresql_embedded::PostgreSQL>>);
 
+/// Evita que dos llamadas concurrentes a `confirmar_transicion_agencia`
+/// corran la transición dos veces (Etapa 11-G, Plan 8 — hallazgo de
+/// revisión): sin esto, dos invocaciones simultáneas podrían pasar ambas el
+/// check de `fase == ArcoCompletado` antes de que la primera termine de
+/// escribir el nuevo estado. `AtomicBool` en vez de otro `Mutex` porque
+/// necesitamos poder consultarlo/liberarlo sin arrastrar un guard a través
+/// del `.await` de la transición.
+struct TransicionEnCurso(std::sync::atomic::AtomicBool);
+
 /// Fase del arco de la empresa activa (Etapa 7/11-G, Plan 8): trabajo
 /// normal, el lote dedicado del mini-boss, o el arco ya completo (esperando
 /// que el jugador confirme la transición de la Agencia). Deliberadamente
@@ -296,31 +305,42 @@ async fn confirmar_transicion_agencia(
     jugador: tauri::State<'_, Jugador>,
     turno_state: tauri::State<'_, Turno>,
     embedded: tauri::State<'_, EmbeddedPostgres>,
+    transicion: tauri::State<'_, TransicionEnCurso>,
 ) -> Result<EstadoTurnoView, String> {
-    {
-        let manejado = turno_state.0.lock().unwrap();
-        if manejado.fase != FaseArco::ArcoCompletado {
-            return Err("El arco de la empresa todavía no está completo.".to_string());
-        }
+    if transicion.0.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        return Err("Ya hay una transición de Agencia en curso.".to_string());
     }
 
-    let rango = jugador.0.lock().unwrap().rango;
+    let resultado = async {
+        {
+            let manejado = turno_state.0.lock().unwrap();
+            if manejado.fase != FaseArco::ArcoCompletado {
+                return Err("El arco de la empresa todavía no está completo.".to_string());
+            }
+        }
 
-    let pg = embedded
-        .0
-        .lock()
-        .unwrap()
-        .take()
-        .ok_or_else(|| "Postgres embebido no está disponible.".to_string())?;
-    let resultado = transicionar_a_empresa(&pg, db::Company::Postafeta, rango).await;
-    embedded.0.lock().unwrap().replace(pg);
-    let (pool, nuevo_manejado) = resultado.map_err(|e| e.to_string())?;
+        let rango = jugador.0.lock().unwrap().rango;
 
-    jugador.0.lock().unwrap().reputacion = 0.0;
-    *state.0.lock().unwrap() = pool;
-    *turno_state.0.lock().unwrap() = nuevo_manejado;
+        let pg = embedded
+            .0
+            .lock()
+            .unwrap()
+            .take()
+            .ok_or_else(|| "Postgres embebido no está disponible.".to_string())?;
+        let resultado_transicion = transicionar_a_empresa(&pg, db::Company::Postafeta, rango).await;
+        embedded.0.lock().unwrap().replace(pg);
+        let (pool, nuevo_manejado) = resultado_transicion.map_err(|e| e.to_string())?;
 
-    Ok(EstadoTurnoView::from(&*turno_state.0.lock().unwrap()))
+        jugador.0.lock().unwrap().reputacion = 0.0;
+        *state.0.lock().unwrap() = pool;
+        *turno_state.0.lock().unwrap() = nuevo_manejado;
+
+        Ok(EstadoTurnoView::from(&*turno_state.0.lock().unwrap()))
+    }
+    .await;
+
+    transicion.0.store(false, std::sync::atomic::Ordering::SeqCst);
+    resultado
 }
 
 #[tauri::command]
@@ -395,6 +415,7 @@ pub fn run() {
                     fase: FaseArco::TrabajoNormal,
                 })));
                 handle.manage(EmbeddedPostgres(Mutex::new(Some(pg))));
+                handle.manage(TransicionEnCurso(std::sync::atomic::AtomicBool::new(false)));
             });
             Ok(())
         })
