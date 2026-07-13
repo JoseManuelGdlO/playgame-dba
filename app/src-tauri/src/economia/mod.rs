@@ -665,6 +665,27 @@ mod tests {
     }
 
     #[test]
+    fn aplicar_resultado_asciende_aunque_la_reputacion_salte_muy_por_encima_del_umbral() {
+        // Guarda contra que alguien "arregle" `puede_ascender` cambiando el
+        // `>=` por un `==`: un solo ticket con una ganancia de reputación
+        // grande (750.0, muy por encima del umbral de 500.0) debe seguir
+        // disparando el ascenso en esa misma entrega.
+        let mut estado = EstadoJugador::default();
+        let resultado = Resultado {
+            puntaje_base: 100.0,
+            puntaje_final: 100.0,
+            dinero_ganado: 500,
+            reputacion_ganada: 750.0,
+            xp_ganado: vec![],
+        };
+
+        let ascendio = estado.aplicar_resultado(&resultado);
+
+        assert!(ascendio, "un salto de reputación que sobrepasa el umbral en una sola entrega debe ascender");
+        assert_eq!(estado.rango, Rango::AuxiliarDeSistemas);
+    }
+
+    #[test]
     fn max_slots_es_2_para_becario_y_3_para_auxiliar_de_sistemas() {
         let mut estado = EstadoJugador::default();
         assert_eq!(estado.max_slots(), 2);

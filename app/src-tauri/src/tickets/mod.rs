@@ -81,6 +81,15 @@ pub fn rango_requerido(ticket: &Ticket) -> Rango {
     }
 }
 
+/// Filtra `catalogo` a los tickets elegibles para `rango` (Etapa 10, Plan 7)
+/// — única fuente de verdad para la regla de gating por rango, referenciada
+/// tanto por el turno inicial armado en `setup()` como por
+/// `TurnoManejado::escalar_y_avanzar` (ambos en `lib.rs`) para que la regla
+/// nunca pueda desalinearse entre los dos puntos de llamada.
+pub fn tickets_elegibles(catalogo: &[Ticket], rango: Rango) -> Vec<Ticket> {
+    catalogo.iter().filter(|t| rango_requerido(t) <= rango).cloned().collect()
+}
+
 /// Plantilla "reporte simple": filtra y ordena una tabla por una columna,
 /// sin JOIN ni agregación (Becario: SELECT/WHERE/ORDER BY, Etapa 10).
 fn plantilla_reporte_simple(
@@ -351,5 +360,17 @@ mod tests {
             .filter(|t| rango_requerido(t) <= Rango::Becario)
             .count();
         assert_eq!(elegibles, 3, "el ticket original de Select + los 2 agregados en la Tarea 1");
+    }
+
+    #[test]
+    fn tickets_elegibles_filtra_por_rango_becario_y_devuelve_todo_para_auxiliar() {
+        let catalogo_completo = catalogo(crate::db::Company::HospitalArcangel);
+
+        let elegibles_becario = tickets_elegibles(&catalogo_completo, Rango::Becario);
+        assert_eq!(elegibles_becario.len(), 3, "solo los 3 tickets Select-only son elegibles para Becario");
+        assert!(elegibles_becario.iter().all(|t| rango_requerido(t) <= Rango::Becario));
+
+        let elegibles_auxiliar = tickets_elegibles(&catalogo_completo, Rango::AuxiliarDeSistemas);
+        assert_eq!(elegibles_auxiliar.len(), 8, "Auxiliar de Sistemas desbloquea el catálogo completo");
     }
 }

@@ -46,12 +46,7 @@ impl TurnoManejado {
         for escalamiento in self.actual.escalar_pendientes() {
             jugador.aplicar_penalizacion(escalamiento.reputacion_perdida);
         }
-        let elegibles: Vec<tickets::Ticket> = self
-            .catalogo
-            .iter()
-            .filter(|t| tickets::rango_requerido(t) <= jugador.rango)
-            .cloned()
-            .collect();
+        let elegibles = tickets::tickets_elegibles(&self.catalogo, jugador.rango);
         let (nuevo_turno, siguiente_indice) = turno::EstadoTurno::nuevo(&elegibles, self.indice_siguiente);
         self.actual = nuevo_turno;
         self.indice_siguiente = siguiente_indice;
@@ -260,11 +255,7 @@ pub fn run() {
                 // Etapa 10, Plan 7: el turno inicial ya se filtra por rango —
                 // un Becario recién llegado no debe ver tickets de
                 // Join/Agregación en su primera bandeja.
-                let elegibles: Vec<tickets::Ticket> = catalogo
-                    .iter()
-                    .filter(|t| tickets::rango_requerido(t) <= jugador_inicial.rango)
-                    .cloned()
-                    .collect();
+                let elegibles = tickets::tickets_elegibles(&catalogo, jugador_inicial.rango);
                 let (turno_inicial, indice_siguiente) = turno::EstadoTurno::nuevo(&elegibles, 0);
                 handle.manage(AppState { pool });
                 handle.manage(Jugador(Mutex::new(jugador_inicial)));
@@ -294,4 +285,54 @@ pub fn run() {
             let _ = pg.stop().await;
         });
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tickets::Rango;
+
+    /// Etapa 10, Plan 7: cubre el caso más delicado del ascenso — un jugador
+    /// que asciende a mitad de turno no debe reordenar la bandeja ya
+    /// mostrada, pero el turno *siguiente* (armado por `escalar_y_avanzar`)
+    /// ya debe reflejar el catálogo desbloqueado, incluyendo tickets de
+    /// Join/Agregación que un Becario nunca vería.
+    #[test]
+    fn escalar_y_avanzar_refleja_el_catalogo_desbloqueado_tras_un_ascenso() {
+        let catalogo = tickets::catalogo(db::Company::HospitalArcangel);
+        let elegibles_becario = tickets::tickets_elegibles(&catalogo, Rango::Becario);
+        // Nota: se arranca en el índice 1 (no 0) a propósito. Con exactamente
+        // 3 tickets elegibles para Becario y TAMANO_LOTE = 3, empezar en 0
+        // consume el lote completo y la rotación vuelve a 0 — que, aplicado
+        // después sobre el catálogo completo de 8, apunta de nuevo a los
+        // mismos 3 tickets Select-only por pura coincidencia aritmética
+        // (0 % 3 == 0 % 8). Arrancar en 1 simula un jugador que ya llevaba
+        // turnos jugados antes de ascender, y es lo que deja ver el
+        // comportamiento real que este test cubre: el turno siguiente
+        // avanza sobre el catálogo ya desbloqueado, no sobre el filtrado
+        // viejo.
+        let (turno_inicial, indice_siguiente) = turno::EstadoTurno::nuevo(&elegibles_becario, 1);
+
+        let mut manejado = TurnoManejado {
+            catalogo,
+            indice_siguiente,
+            actual: turno_inicial,
+        };
+        let mut jugador = economia::EstadoJugador {
+            rango: Rango::AuxiliarDeSistemas,
+            ..economia::EstadoJugador::default()
+        };
+
+        manejado.escalar_y_avanzar(&mut jugador);
+
+        assert!(
+            manejado
+                .actual
+                .pendientes
+                .iter()
+                .any(|t| tickets::rango_requerido(t) == Rango::AuxiliarDeSistemas),
+            "tras ascender, el turno siguiente debe poder incluir tickets de Join/Agregación \
+             que un Becario nunca vería"
+        );
+    }
 }
