@@ -1,9 +1,18 @@
 const { invoke } = window.__TAURI__.core;
 
-let sqlInput, statusMsg, resultTable, dineroEl, reputacionEl;
+let sqlInput, statusMsg, resultTable, dineroEl, reputacionEl, rangoEl;
 let perksSelect, perksEquipadosMsg;
 let presupuestoEl, listaTickets, ticketActivoInfo;
-let scoringOverlay;
+let scoringOverlay, scoringAscenso;
+
+const NOMBRE_RANGO = {
+  Becario: "Becario",
+  AuxiliarDeSistemas: "Auxiliar de Sistemas",
+};
+
+function renderRango(rango) {
+  rangoEl.textContent = NOMBRE_RANGO[rango] || rango;
+}
 
 let ticketActivoId = null;
 
@@ -97,6 +106,11 @@ async function cargarTurno() {
   renderBandeja(estadoTurno);
 }
 
+async function cargarRango() {
+  const rango = await invoke("rango_actual");
+  renderRango(rango);
+}
+
 async function cerrarDia() {
   const estadoTurno = await invoke("cerrar_dia");
   ticketActivoId = null;
@@ -127,6 +141,9 @@ function mostrarScoring(score) {
   animarNumero(document.querySelector("#scoring-dinero"), score.dinero_ganado, 0);
   animarNumero(document.querySelector("#scoring-reputacion"), score.reputacion_ganada, 1);
   document.querySelector("#scoring-mentor").textContent = score.comentario_mentor || "";
+  scoringAscenso.textContent = score.ascendio
+    ? `¡Ascendiste a ${NOMBRE_RANGO[score.rango_actual] || score.rango_actual}! +1 slot de perk. Nuevos tickets disponibles.`
+    : "";
   scoringOverlay.classList.remove("oculto");
 }
 
@@ -140,6 +157,7 @@ async function submitTicket() {
     const score = await invoke("resolver_ticket", { id: ticketActivoId, sql: sqlInput.value });
     dineroEl.textContent = score.dinero_total;
     reputacionEl.textContent = score.reputacion_total.toFixed(1);
+    renderRango(score.rango_actual);
     mostrarScoring(score);
     setStatus(score.mensaje, score.pass ? "ok" : "error");
     await cargarTurno();
@@ -201,14 +219,17 @@ window.addEventListener("DOMContentLoaded", async () => {
   resultTable = document.querySelector("#result-table");
   dineroEl = document.querySelector("#dinero");
   reputacionEl = document.querySelector("#reputacion");
+  rangoEl = document.querySelector("#rango");
   perksSelect = document.querySelector("#perks-select");
   perksEquipadosMsg = document.querySelector("#perks-equipados-msg");
   presupuestoEl = document.querySelector("#presupuesto");
   listaTickets = document.querySelector("#lista-tickets");
   ticketActivoInfo = document.querySelector("#ticket-activo-info");
   scoringOverlay = document.querySelector("#scoring-overlay");
+  scoringAscenso = document.querySelector("#scoring-ascenso");
 
   await cargarTurno();
+  await cargarRango();
   await cargarPerks();
 
   document.querySelector("#btn-play").addEventListener("click", runQuery);
