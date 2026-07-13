@@ -2,6 +2,7 @@ mod db;
 mod economia;
 mod perks;
 mod tickets;
+mod turno;
 mod validation;
 
 use std::sync::Mutex;

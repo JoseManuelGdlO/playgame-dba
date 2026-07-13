@@ -124,6 +124,12 @@ impl EstadoJugador {
         self.reputacion >= UMBRAL_ASCENSO_AUXILIAR
     }
 
+    /// Aplica una penalización de reputación (Etapa 11-A: tickets escalados
+    /// por no atenderse a tiempo en el turno) — nunca baja de 0.
+    pub fn aplicar_penalizacion(&mut self, reputacion_perdida: f64) {
+        self.reputacion = (self.reputacion - reputacion_perdida).max(0.0);
+    }
+
     /// Etapa 13: un perk se desbloquea cuando se cumplen 3 condiciones a la
     /// vez — dinero suficiente, reputación mínima, y maestría (XP) suficiente
     /// en el arquetipo que ese perk requiere.
@@ -368,6 +374,18 @@ mod tests {
 
         estado.reputacion = 500.0;
         assert!(estado.puede_ascender());
+    }
+
+    #[test]
+    fn aplicar_penalizacion_resta_reputacion_sin_bajar_de_cero() {
+        let mut estado = EstadoJugador::default();
+        estado.reputacion = 5.0;
+
+        estado.aplicar_penalizacion(2.0);
+        assert_eq!(estado.reputacion, 3.0);
+
+        estado.aplicar_penalizacion(10.0);
+        assert_eq!(estado.reputacion, 0.0, "no debe bajar de 0");
     }
 
     #[test]
