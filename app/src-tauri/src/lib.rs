@@ -19,13 +19,30 @@ struct Jugador(Mutex<economia::EstadoJugador>);
 /// Mantiene vivo el servidor Postgres embebido y permite detenerlo al salir.
 struct EmbeddedPostgres(Mutex<Option<postgresql_embedded::PostgreSQL>>);
 
-/// Catálogo de tickets de la empresa activa + índice del ticket actual
-/// (Etapa 14). Selección round-robin simple — sin bandeja de entrada ni
-/// tiempo de turno todavía (Etapa 11-A, plan de UI/loop posterior).
-struct Tickets {
+/// El catálogo completo de la empresa activa, el índice de rotación para el
+/// próximo turno, y el turno (bandeja) actual (Etapa 11-A) — reemplaza la
+/// selección round-robin simple de un solo "ticket actual" (Plan 3).
+struct TurnoManejado {
     catalogo: Vec<tickets::Ticket>,
-    indice_actual: Mutex<usize>,
+    indice_siguiente: usize,
+    actual: turno::EstadoTurno,
 }
+
+impl TurnoManejado {
+    /// Escala los tickets pendientes del turno actual (penaliza reputación)
+    /// y arranca el turno siguiente — usado tanto cuando el presupuesto se
+    /// agota como cuando el jugador cierra el día manualmente (Etapa 11-A).
+    fn escalar_y_avanzar(&mut self, jugador: &mut economia::EstadoJugador) {
+        for escalamiento in self.actual.escalar_pendientes() {
+            jugador.aplicar_penalizacion(escalamiento.reputacion_perdida);
+        }
+        let (nuevo_turno, siguiente_indice) = turno::EstadoTurno::nuevo(&self.catalogo, self.indice_siguiente);
+        self.actual = nuevo_turno;
+        self.indice_siguiente = siguiente_indice;
+    }
+}
+
+struct Turno(Mutex<TurnoManejado>);
 
 #[derive(serde::Serialize)]
 struct ScoreResult {
@@ -76,9 +93,8 @@ fn vista_perks(estado: &economia::EstadoJugador) -> Vec<PerkConEstado> {
 }
 
 #[tauri::command]
-fn ticket_actual(tickets: tauri::State<'_, Tickets>) -> tickets::Ticket {
-    let indice = *tickets.indice_actual.lock().unwrap();
-    tickets.catalogo[indice].clone()
+fn turno_actual(turno: tauri::State<'_, Turno>) -> turno::EstadoTurno {
+    turno.0.lock().unwrap().actual.clone()
 }
 
 #[tauri::command]
@@ -87,14 +103,21 @@ async fn run_query(state: tauri::State<'_, AppState>, sql: String) -> Result<db:
 }
 
 #[tauri::command]
-async fn submit_ticket(
+async fn resolver_ticket(
     state: tauri::State<'_, AppState>,
     jugador: tauri::State<'_, Jugador>,
-    tickets: tauri::State<'_, Tickets>,
+    turno_state: tauri::State<'_, Turno>,
+    id: String,
     sql: String,
 ) -> Result<ScoreResult, String> {
-    let indice = *tickets.indice_actual.lock().unwrap();
-    let ticket = tickets.catalogo[indice].clone();
+    let ticket = {
+        let manejado = turno_state.0.lock().unwrap();
+        manejado
+            .actual
+            .buscar_pendiente(&id)
+            .cloned()
+            .ok_or_else(|| format!("'{id}' no es un ticket pendiente de este turno."))?
+    };
 
     let evaluacion = validation::evaluar_entrega(&state.pool, &sql, &ticket.sql_dorada, ticket.requiere_orden)
         .await
@@ -106,9 +129,11 @@ async fn submit_ticket(
     let resultado = economia::calcular(&evaluacion, &ticket, multiplicador_dinero, multiplicador_reputacion);
     estado.aplicar_resultado(&resultado);
 
-    if evaluacion.correcta {
-        let mut indice_mut = tickets.indice_actual.lock().unwrap();
-        *indice_mut = (*indice_mut + 1) % tickets.catalogo.len();
+    let mut manejado = turno_state.0.lock().unwrap();
+    manejado.actual.resolver(&id);
+
+    if manejado.actual.pendientes.is_empty() || manejado.actual.turno_agotado() {
+        manejado.escalar_y_avanzar(&mut estado);
     }
 
     Ok(ScoreResult {
@@ -131,6 +156,14 @@ async fn submit_ticket(
             "El resultado no coincide con lo que pidió la solicitud. Revisa tu consulta.".to_string()
         },
     })
+}
+
+#[tauri::command]
+fn cerrar_dia(jugador: tauri::State<'_, Jugador>, turno_state: tauri::State<'_, Turno>) -> turno::EstadoTurno {
+    let mut estado = jugador.0.lock().unwrap();
+    let mut manejado = turno_state.0.lock().unwrap();
+    manejado.escalar_y_avanzar(&mut estado);
+    manejado.actual.clone()
 }
 
 #[tauri::command]
@@ -165,9 +198,10 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-            ticket_actual,
+            turno_actual,
             run_query,
-            submit_ticket,
+            resolver_ticket,
+            cerrar_dia,
             catalogo_perks,
             desbloquear_perk,
             equipar_perk,
@@ -183,13 +217,18 @@ pub fn run() {
                     .await
                     .expect("no se pudo cargar Hospital Arcángel");
                 // `pool` y `catalogo` deben cargarse siempre con la misma `Company`:
-                // `submit_ticket` valida el SQL del jugador (ejecutado contra `pool`)
-                // contra `sql_dorada` del ticket actual de `Tickets`, así que si
+                // `resolver_ticket` valida el SQL del jugador (ejecutado contra
+                // `pool`) contra `sql_dorada` de un ticket de `Turno`, así que si
                 // alguna vez divergen, se validaría contra el esquema de otra empresa.
                 let catalogo = tickets::catalogo(db::Company::HospitalArcangel);
+                let (turno_inicial, indice_siguiente) = turno::EstadoTurno::nuevo(&catalogo, 0);
                 handle.manage(AppState { pool });
                 handle.manage(Jugador(Mutex::new(economia::EstadoJugador::default())));
-                handle.manage(Tickets { catalogo, indice_actual: Mutex::new(0) });
+                handle.manage(Turno(Mutex::new(TurnoManejado {
+                    catalogo,
+                    indice_siguiente,
+                    actual: turno_inicial,
+                })));
                 handle.manage(EmbeddedPostgres(Mutex::new(Some(pg))));
             });
             Ok(())
