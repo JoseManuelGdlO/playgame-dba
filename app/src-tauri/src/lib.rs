@@ -26,13 +26,27 @@ struct Jugador(Mutex<economia::EstadoJugador>);
 /// Mantiene vivo el servidor Postgres embebido y permite detenerlo al salir.
 struct EmbeddedPostgres(Mutex<Option<postgresql_embedded::PostgreSQL>>);
 
+/// Fase del arco de la empresa activa (Etapa 7/11-G, Plan 8): trabajo
+/// normal, el lote dedicado del mini-boss, o el arco ya completo (esperando
+/// que el jugador confirme la transición de la Agencia). Deliberadamente
+/// específica del único mini-boss del MVP — no es un sistema genérico para
+/// más empresas (Fase 1+).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+enum FaseArco {
+    TrabajoNormal,
+    MiniBoss,
+    ArcoCompletado,
+}
+
 /// El catálogo completo de la empresa activa, el índice de rotación para el
-/// próximo turno, y el turno (bandeja) actual (Etapa 11-A) — reemplaza la
-/// selección round-robin simple de un solo "ticket actual" (Plan 3).
+/// próximo turno, el turno (bandeja) actual (Etapa 11-A) — reemplaza la
+/// selección round-robin simple de un solo "ticket actual" (Plan 3) — y la
+/// fase del arco de esa empresa (Etapa 7/11-G, Plan 8).
 struct TurnoManejado {
     catalogo: Vec<tickets::Ticket>,
     indice_siguiente: usize,
     actual: turno::EstadoTurno,
+    fase: FaseArco,
 }
 
 impl TurnoManejado {
@@ -51,9 +65,51 @@ impl TurnoManejado {
         self.actual = nuevo_turno;
         self.indice_siguiente = siguiente_indice;
     }
+
+    /// Aplica las consecuencias de haber resuelto un ticket sobre la fase
+    /// del arco (Etapa 7/11-G, Plan 8), llamado desde `resolver_ticket`
+    /// justo después de `aplicar_resultado`: si `ascendio` es `true`, el lote
+    /// normal se reemplaza de inmediato por los 2 tickets del mini-boss (sin
+    /// mezclarse con lo que quedaba pendiente); si ya estábamos en el lote
+    /// del mini-boss y se acaba de vaciar, el arco queda completo; en
+    /// cualquier otro caso, se comporta como antes (`escalar_y_avanzar`
+    /// cuando el turno normal se agota o se vacía).
+    fn actualizar_fase(&mut self, ascendio: bool, jugador: &mut economia::EstadoJugador) {
+        if ascendio {
+            let (turno_mini_boss, _) = turno::EstadoTurno::nuevo(&tickets::mini_boss_hospital_arcangel(), 0);
+            self.actual = turno_mini_boss;
+            self.fase = FaseArco::MiniBoss;
+        } else if self.fase == FaseArco::MiniBoss && self.actual.pendientes.is_empty() {
+            self.fase = FaseArco::ArcoCompletado;
+        } else if self.fase == FaseArco::TrabajoNormal
+            && (self.actual.pendientes.is_empty() || self.actual.turno_agotado())
+        {
+            self.escalar_y_avanzar(jugador);
+        }
+    }
 }
 
 struct Turno(Mutex<TurnoManejado>);
+
+/// Vista de `EstadoTurno` (módulo `turno`) más la fase del arco (Etapa
+/// 7/11-G, Plan 8) — `turno::EstadoTurno` se queda sin saber nada de
+/// empresas/mini-boss, así que esta vista combinada vive aquí, no ahí.
+#[derive(serde::Serialize)]
+struct EstadoTurnoView {
+    presupuesto_restante: u32,
+    pendientes: Vec<tickets::Ticket>,
+    fase: FaseArco,
+}
+
+impl From<&TurnoManejado> for EstadoTurnoView {
+    fn from(manejado: &TurnoManejado) -> Self {
+        EstadoTurnoView {
+            presupuesto_restante: manejado.actual.presupuesto_restante,
+            pendientes: manejado.actual.pendientes.clone(),
+            fase: manejado.fase,
+        }
+    }
+}
 
 #[derive(serde::Serialize)]
 struct ScoreResult {
@@ -108,8 +164,8 @@ fn vista_perks(estado: &economia::EstadoJugador) -> Vec<PerkConEstado> {
 }
 
 #[tauri::command]
-fn turno_actual(turno: tauri::State<'_, Turno>) -> turno::EstadoTurno {
-    turno.0.lock().unwrap().actual.clone()
+fn turno_actual(turno: tauri::State<'_, Turno>) -> EstadoTurnoView {
+    EstadoTurnoView::from(&*turno.0.lock().unwrap())
 }
 
 /// Etapa 10, Plan 7: expone el rango vigente para que el frontend pinte el
@@ -159,9 +215,7 @@ async fn resolver_ticket(
     let ascendio = estado.aplicar_resultado(&resultado);
 
     let mut manejado = turno_state.0.lock().unwrap();
-    if manejado.actual.pendientes.is_empty() || manejado.actual.turno_agotado() {
-        manejado.escalar_y_avanzar(&mut estado);
-    }
+    manejado.actualizar_fase(ascendio, &mut estado);
 
     Ok(ScoreResult {
         pass: evaluacion.correcta,
@@ -188,11 +242,17 @@ async fn resolver_ticket(
 }
 
 #[tauri::command]
-fn cerrar_dia(jugador: tauri::State<'_, Jugador>, turno_state: tauri::State<'_, Turno>) -> turno::EstadoTurno {
+fn cerrar_dia(jugador: tauri::State<'_, Jugador>, turno_state: tauri::State<'_, Turno>) -> EstadoTurnoView {
     let mut estado = jugador.0.lock().unwrap();
     let mut manejado = turno_state.0.lock().unwrap();
-    manejado.escalar_y_avanzar(&mut estado);
-    manejado.actual.clone()
+    // Etapa 7/11-G, Plan 8: cerrar el día no tiene sentido narrativo (ni
+    // mecánico) durante el mini-boss o esperando la Agencia — el jugador no
+    // puede simplemente saltárselos, así que fuera de `TrabajoNormal` esto
+    // no hace nada.
+    if manejado.fase == FaseArco::TrabajoNormal {
+        manejado.escalar_y_avanzar(&mut estado);
+    }
+    EstadoTurnoView::from(&*manejado)
 }
 
 #[tauri::command]
@@ -263,6 +323,7 @@ pub fn run() {
                     catalogo,
                     indice_siguiente,
                     actual: turno_inicial,
+                    fase: FaseArco::TrabajoNormal,
                 })));
                 handle.manage(EmbeddedPostgres(Mutex::new(Some(pg))));
             });
@@ -317,6 +378,7 @@ mod tests {
             catalogo,
             indice_siguiente,
             actual: turno_inicial,
+            fase: FaseArco::TrabajoNormal,
         };
         let mut jugador = economia::EstadoJugador {
             rango: Rango::AuxiliarDeSistemas,
@@ -334,5 +396,86 @@ mod tests {
             "tras ascender, el turno siguiente debe poder incluir tickets de Join/Agregación \
              que un Becario nunca vería"
         );
+    }
+
+    #[test]
+    fn actualizar_fase_dispara_el_lote_del_mini_boss_al_ascender() {
+        let catalogo = tickets::catalogo(db::Company::HospitalArcangel);
+        let elegibles_becario = tickets::tickets_elegibles(&catalogo, Rango::Becario);
+        let (turno_inicial, indice_siguiente) = turno::EstadoTurno::nuevo(&elegibles_becario, 0);
+        let mut manejado = TurnoManejado {
+            catalogo,
+            indice_siguiente,
+            actual: turno_inicial,
+            fase: FaseArco::TrabajoNormal,
+        };
+        let mut jugador = economia::EstadoJugador::default();
+
+        manejado.actualizar_fase(true, &mut jugador);
+
+        assert_eq!(manejado.fase, FaseArco::MiniBoss);
+        assert_eq!(manejado.actual.pendientes.len(), 2);
+        assert!(
+            manejado
+                .actual
+                .pendientes
+                .iter()
+                .all(|t| tickets::rango_requerido(t) == Rango::AuxiliarDeSistemas),
+            "los 2 tickets del mini-boss son Auxiliar-tier"
+        );
+    }
+
+    #[test]
+    fn actualizar_fase_completa_el_arco_al_vaciar_el_lote_del_mini_boss() {
+        let catalogo = tickets::catalogo(db::Company::HospitalArcangel);
+        let (turno_vacio, _) = turno::EstadoTurno::nuevo(&[], 0);
+        let mut manejado = TurnoManejado {
+            catalogo,
+            indice_siguiente: 0,
+            actual: turno_vacio,
+            fase: FaseArco::MiniBoss,
+        };
+        let mut jugador = economia::EstadoJugador::default();
+
+        manejado.actualizar_fase(false, &mut jugador);
+
+        assert_eq!(manejado.fase, FaseArco::ArcoCompletado);
+        assert!(manejado.actual.pendientes.is_empty(), "no debe dibujarse un turno normal");
+    }
+
+    #[test]
+    fn actualizar_fase_avanza_el_turno_normal_cuando_no_hay_ascenso_ni_mini_boss() {
+        let catalogo = tickets::catalogo(db::Company::HospitalArcangel);
+        let (turno_vacio, indice_siguiente) = turno::EstadoTurno::nuevo(&[], 0);
+        let mut manejado = TurnoManejado {
+            catalogo,
+            indice_siguiente,
+            actual: turno_vacio,
+            fase: FaseArco::TrabajoNormal,
+        };
+        let mut jugador = economia::EstadoJugador::default();
+
+        manejado.actualizar_fase(false, &mut jugador);
+
+        assert_eq!(manejado.fase, FaseArco::TrabajoNormal);
+        assert!(!manejado.actual.pendientes.is_empty(), "debe dibujar un turno normal nuevo");
+    }
+
+    #[test]
+    fn actualizar_fase_no_hace_nada_en_arco_completado() {
+        let catalogo = tickets::catalogo(db::Company::HospitalArcangel);
+        let (turno_vacio, _) = turno::EstadoTurno::nuevo(&[], 0);
+        let mut manejado = TurnoManejado {
+            catalogo,
+            indice_siguiente: 0,
+            actual: turno_vacio,
+            fase: FaseArco::ArcoCompletado,
+        };
+        let mut jugador = economia::EstadoJugador::default();
+
+        manejado.actualizar_fase(false, &mut jugador);
+
+        assert_eq!(manejado.fase, FaseArco::ArcoCompletado);
+        assert!(manejado.actual.pendientes.is_empty());
     }
 }
