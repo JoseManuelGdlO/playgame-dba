@@ -474,26 +474,37 @@ async fn iniciar_partida(
     jugador: tauri::State<'_, Jugador>,
     turno_state: tauri::State<'_, Turno>,
     embedded: tauri::State<'_, EmbeddedPostgres>,
+    transicion: tauri::State<'_, TransicionEnCurso>,
     dir: tauri::State<'_, DirectorioGuardado>,
 ) -> Result<EstadoJuegoView, String> {
-    let pg = embedded
-        .0
-        .lock()
-        .unwrap()
-        .take()
-        .ok_or_else(|| "Postgres embebido no está disponible.".to_string())?;
-    let resultado = estado_de_partida_nueva(&pg).await;
-    embedded.0.lock().unwrap().replace(pg);
-    let (pool, jugador_nuevo, manejado_nuevo) = resultado.map_err(|e| e.to_string())?;
+    if transicion.0.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        return Err("Ya hay una transición de partida en curso.".to_string());
+    }
 
-    *jugador.0.lock().unwrap() = jugador_nuevo;
-    *state.0.lock().unwrap() = pool;
-    *turno_state.0.lock().unwrap() = manejado_nuevo;
+    let resultado = async {
+        let pg = embedded
+            .0
+            .lock()
+            .unwrap()
+            .take()
+            .ok_or_else(|| "Postgres embebido no está disponible.".to_string())?;
+        let resultado_estado = estado_de_partida_nueva(&pg).await;
+        embedded.0.lock().unwrap().replace(pg);
+        let (pool, jugador_nuevo, manejado_nuevo) = resultado_estado.map_err(|e| e.to_string())?;
 
-    let estado = jugador.0.lock().unwrap();
-    let manejado = turno_state.0.lock().unwrap();
-    autoguardar(&dir.0, &estado, &manejado);
-    Ok(EstadoJuegoView::construir(&estado, &manejado))
+        *jugador.0.lock().unwrap() = jugador_nuevo;
+        *state.0.lock().unwrap() = pool;
+        *turno_state.0.lock().unwrap() = manejado_nuevo;
+
+        let estado = jugador.0.lock().unwrap();
+        let manejado = turno_state.0.lock().unwrap();
+        autoguardar(&dir.0, &estado, &manejado);
+        Ok(EstadoJuegoView::construir(&estado, &manejado))
+    }
+    .await;
+
+    transicion.0.store(false, std::sync::atomic::Ordering::SeqCst);
+    resultado
 }
 
 /// Carga el único slot de guardado (Etapa 11-G/Menú, Plan 9). Falla si no
@@ -506,52 +517,63 @@ async fn cargar_partida(
     jugador: tauri::State<'_, Jugador>,
     turno_state: tauri::State<'_, Turno>,
     embedded: tauri::State<'_, EmbeddedPostgres>,
+    transicion: tauri::State<'_, TransicionEnCurso>,
     dir: tauri::State<'_, DirectorioGuardado>,
 ) -> Result<EstadoJuegoView, String> {
-    let partida = guardado::cargar(&dir.0)
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "No hay ninguna partida guardada.".to_string())?;
+    if transicion.0.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        return Err("Ya hay una transición de partida en curso.".to_string());
+    }
 
-    let pg = embedded
-        .0
-        .lock()
-        .unwrap()
-        .take()
-        .ok_or_else(|| "Postgres embebido no está disponible.".to_string())?;
-    let resultado_pool = db::load_company(&pg, partida.empresa).await;
-    embedded.0.lock().unwrap().replace(pg);
-    let pool = resultado_pool.map_err(|e| e.to_string())?;
+    let resultado = async {
+        let partida = guardado::cargar(&dir.0)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "No hay ninguna partida guardada.".to_string())?;
 
-    let catalogo_completo = tickets::catalogo(partida.empresa);
-    let pendientes = resolver_tickets_guardados(partida.empresa, partida.fase, &partida.pendientes_ids);
+        let pg = embedded
+            .0
+            .lock()
+            .unwrap()
+            .take()
+            .ok_or_else(|| "Postgres embebido no está disponible.".to_string())?;
+        let resultado_pool = db::load_company(&pg, partida.empresa).await;
+        embedded.0.lock().unwrap().replace(pg);
+        let pool = resultado_pool.map_err(|e| e.to_string())?;
 
-    let jugador_cargado = economia::EstadoJugador {
-        dinero: partida.dinero,
-        reputacion: partida.reputacion,
-        xp_por_arquetipo: partida.xp_por_arquetipo,
-        rango: partida.rango,
-        perks_desbloqueados: partida.perks_desbloqueados.iter().filter_map(|id| perks::buscar(id)).map(|p| p.id).collect(),
-        perks_equipados: partida.perks_equipados.iter().filter_map(|id| perks::buscar(id)).map(|p| p.id).collect(),
-    };
+        let catalogo_completo = tickets::catalogo(partida.empresa);
+        let pendientes = resolver_tickets_guardados(partida.empresa, partida.fase, &partida.pendientes_ids);
 
-    let manejado_cargado = TurnoManejado {
-        catalogo: catalogo_completo,
-        indice_siguiente: partida.indice_siguiente,
-        actual: turno::EstadoTurno {
-            presupuesto_restante: partida.presupuesto_restante,
-            pendientes,
-        },
-        fase: partida.fase,
-        empresa: partida.empresa,
-    };
+        let jugador_cargado = economia::EstadoJugador {
+            dinero: partida.dinero,
+            reputacion: partida.reputacion,
+            xp_por_arquetipo: partida.xp_por_arquetipo,
+            rango: partida.rango,
+            perks_desbloqueados: partida.perks_desbloqueados.iter().filter_map(|id| perks::buscar(id)).map(|p| p.id).collect(),
+            perks_equipados: partida.perks_equipados.iter().filter_map(|id| perks::buscar(id)).map(|p| p.id).collect(),
+        };
 
-    *state.0.lock().unwrap() = pool;
-    *jugador.0.lock().unwrap() = jugador_cargado;
-    *turno_state.0.lock().unwrap() = manejado_cargado;
+        let manejado_cargado = TurnoManejado {
+            catalogo: catalogo_completo,
+            indice_siguiente: partida.indice_siguiente,
+            actual: turno::EstadoTurno {
+                presupuesto_restante: partida.presupuesto_restante,
+                pendientes,
+            },
+            fase: partida.fase,
+            empresa: partida.empresa,
+        };
 
-    let estado = jugador.0.lock().unwrap();
-    let manejado = turno_state.0.lock().unwrap();
-    Ok(EstadoJuegoView::construir(&estado, &manejado))
+        *state.0.lock().unwrap() = pool;
+        *jugador.0.lock().unwrap() = jugador_cargado;
+        *turno_state.0.lock().unwrap() = manejado_cargado;
+
+        let estado = jugador.0.lock().unwrap();
+        let manejado = turno_state.0.lock().unwrap();
+        Ok(EstadoJuegoView::construir(&estado, &manejado))
+    }
+    .await;
+
+    transicion.0.store(false, std::sync::atomic::Ordering::SeqCst);
+    resultado
 }
 
 #[tauri::command]
