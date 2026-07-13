@@ -43,10 +43,6 @@ pub enum TipoTicket {
 pub enum Prioridad {
     Baja,
     Media,
-    // Ningún ticket de los catálogos actuales (Hospital Arcángel/Postafeta,
-    // Tareas 2-3) usa esta prioridad todavía — queda reservada para tickets
-    // futuros de mayor urgencia.
-    #[allow(dead_code)]
     Urgente,
 }
 
@@ -256,6 +252,12 @@ pub fn catalogo(company: crate::db::Company) -> Vec<Ticket> {
     }
 }
 
+/// Los 2 tickets del mini-boss de Hospital Arcángel — el Auditor de
+/// Cumplimiento (Etapa 7/9/11-G, Plan 8), el único mini-boss del MVP.
+pub fn mini_boss_hospital_arcangel() -> Vec<Ticket> {
+    hospital_arcangel::mini_boss()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -372,5 +374,29 @@ mod tests {
 
         let elegibles_auxiliar = tickets_elegibles(&catalogo_completo, Rango::AuxiliarDeSistemas);
         assert_eq!(elegibles_auxiliar.len(), 8, "Auxiliar de Sistemas desbloquea el catálogo completo");
+    }
+
+    #[test]
+    fn mini_boss_hospital_arcangel_tiene_2_tickets_auxiliar_tier_mas_exigentes_que_el_resto() {
+        let mini_boss = mini_boss_hospital_arcangel();
+        assert_eq!(mini_boss.len(), 2);
+        assert!(
+            mini_boss.iter().all(|t| rango_requerido(t) == Rango::AuxiliarDeSistemas),
+            "los 2 tickets del mini-boss deben ser Auxiliar-tier"
+        );
+
+        let catalogo_normal = catalogo(crate::db::Company::HospitalArcangel);
+        let max_valor_base_normal = catalogo_normal.iter().map(|t| t.valor_base).max().unwrap();
+        let max_factor_reputacion_normal =
+            catalogo_normal.iter().map(|t| t.factor_reputacion).fold(0.0, f64::max);
+
+        assert!(
+            mini_boss.iter().all(|t| t.valor_base > max_valor_base_normal),
+            "el mini-boss debe pagar más que cualquier ticket normal"
+        );
+        assert!(
+            mini_boss.iter().all(|t| t.factor_reputacion > max_factor_reputacion_normal),
+            "el mini-boss debe dar más reputación que cualquier ticket normal"
+        );
     }
 }

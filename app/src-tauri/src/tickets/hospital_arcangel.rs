@@ -1,9 +1,8 @@
 use super::{
     plantilla_depuracion, plantilla_reporte_agregado, plantilla_reporte_join,
-    plantilla_reporte_join_agregado, plantilla_reporte_simple, Arquetipo, Ticket,
+    plantilla_reporte_join_agregado, plantilla_reporte_simple, Arquetipo, Prioridad, Ticket,
+    TipoTicket,
 };
-#[cfg(test)]
-use super::TipoTicket;
 
 pub(crate) fn catalogo() -> Vec<Ticket> {
     vec![
@@ -78,6 +77,55 @@ pub(crate) fn catalogo() -> Vec<Ticket> {
     ]
 }
 
+/// Los 2 tickets del mini-boss de Hospital Arcángel — el Auditor de
+/// Cumplimiento (Etapa 7/9/11-G, Plan 8), la única pieza de escritura
+/// verdaderamente única de esta empresa. Se construyen a mano, no vía
+/// `plantilla_*`: su `valor_base`/`factor_reputacion` son deliberadamente más
+/// altos que cualquier ticket normal del catálogo, reflejando el clímax
+/// narrativo del arco. `costo_tiempo` (25 cada uno) se mantiene
+/// deliberadamente bajo el presupuesto de turno (100) para que el lote de 2
+/// nunca se agote a mitad de camino.
+pub(crate) fn mini_boss() -> Vec<Ticket> {
+    vec![
+        Ticket {
+            id: "hospital_miniboss_pacientes_sin_seguro",
+            tipo: TipoTicket::ReporteAnalisis,
+            solicitante: "Auditor de Cumplimiento",
+            motivo: "El Auditor de Cumplimiento exige saber exactamente quién no tiene seguro médico registrado, antes de que Finanzas lo descubra primero.".to_string(),
+            solicitud: "Lista el nombre de cada paciente sin seguro médico junto con el nombre de su departamento, ordenados por nombre de paciente.".to_string(),
+            prioridad: Prioridad::Urgente,
+            costo_tiempo: 25,
+            arquetipos: vec![Arquetipo::Join],
+            sql_dorada: "SELECT p.nombre, d.nombre AS departamento FROM pacientes p JOIN departamentos d ON p.departamento_id = d.id WHERE p.seguro_id = 5 ORDER BY p.nombre".to_string(),
+            sql_inicial: None,
+            requiere_orden: true,
+            peso_correctitud: 0.5,
+            peso_velocidad: 0.25,
+            peso_practicas: 0.25,
+            valor_base: 300,
+            factor_reputacion: 1.5,
+        },
+        Ticket {
+            id: "hospital_miniboss_tratamientos_por_tipo",
+            tipo: TipoTicket::ReporteAnalisis,
+            solicitante: "Auditor de Cumplimiento",
+            motivo: "El Auditor de Cumplimiento quiere cruzar cuántos tratamientos se facturaron de cada tipo contra los recibos físicos antes de firmar el cierre trimestral.".to_string(),
+            solicitud: "Lista cada tipo de tratamiento junto con cuántas veces se registró, del más frecuente al menos frecuente (alfabético en caso de empate).".to_string(),
+            prioridad: Prioridad::Urgente,
+            costo_tiempo: 25,
+            arquetipos: vec![Arquetipo::Agregacion],
+            sql_dorada: "SELECT tipo, COUNT(*) AS total FROM tratamientos GROUP BY tipo ORDER BY total DESC, tipo".to_string(),
+            sql_inicial: None,
+            requiere_orden: true,
+            peso_correctitud: 0.5,
+            peso_velocidad: 0.25,
+            peso_practicas: 0.25,
+            valor_base: 300,
+            factor_reputacion: 1.5,
+        },
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -127,6 +175,30 @@ mod tests {
                 ticket.id,
                 evaluacion.puntaje_velocidad
             );
+        }
+
+        pool.close().await;
+        pg.stop().await.expect("Postgres debe detenerse limpiamente");
+    }
+
+    #[test]
+    fn mini_boss_tiene_2_tickets_uno_con_join_y_otro_con_agregacion() {
+        let tickets = mini_boss();
+        assert_eq!(tickets.len(), 2);
+        assert_eq!(tickets[0].arquetipos, vec![Arquetipo::Join]);
+        assert_eq!(tickets[1].arquetipos, vec![Arquetipo::Agregacion]);
+        assert!(tickets.iter().all(|t| t.prioridad == Prioridad::Urgente));
+    }
+
+    #[tokio::test]
+    async fn las_queries_doradas_del_mini_boss_ejecutan() {
+        let pg = db::init_embedded_postgres().await.expect("Postgres embebido debe arrancar");
+        let pool = db::load_company(&pg, Company::HospitalArcangel).await.expect("Hospital Arcángel debe cargar");
+
+        for ticket in mini_boss() {
+            db::run_query(&pool, &ticket.sql_dorada)
+                .await
+                .unwrap_or_else(|e| panic!("la query dorada del mini-boss '{}' debe ejecutar: {e}", ticket.id));
         }
 
         pool.close().await;
