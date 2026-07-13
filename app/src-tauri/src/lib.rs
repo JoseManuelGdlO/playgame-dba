@@ -15,10 +15,13 @@ mod validation;
 use std::sync::Mutex;
 use tauri::Manager;
 
-/// Pool de conexión al Postgres embebido, gestionado por Tauri.
-struct AppState {
-    pool: sqlx::PgPool,
-}
+/// Pool de conexión al Postgres embebido, gestionado por Tauri. `Mutex` en
+/// vez de un campo suelto (Etapa 11-G, Plan 8) porque
+/// `confirmar_transicion_agencia` necesita poder reemplazarlo en caliente al
+/// cambiar de empresa; `PgPool` es barato de clonar (handle basado en Arc
+/// internamente), así que los comandos que lo usan clonan la copia vigente
+/// en vez de tener que mantener el lock abierto durante un `.await`.
+struct AppState(Mutex<sqlx::PgPool>);
 
 /// Estado de economía del jugador (Etapa 12/13), gestionado por Tauri.
 struct Jugador(Mutex<economia::EstadoJugador>);
@@ -177,7 +180,8 @@ fn rango_actual(jugador: tauri::State<'_, Jugador>) -> tickets::Rango {
 
 #[tauri::command]
 async fn run_query(state: tauri::State<'_, AppState>, sql: String) -> Result<db::QueryResult, String> {
-    db::run_query(&state.pool, &sql).await.map_err(|e| e.to_string())
+    let pool = state.0.lock().unwrap().clone();
+    db::run_query(&pool, &sql).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -204,7 +208,8 @@ async fn resolver_ticket(
             .ok_or_else(|| format!("'{id}' ya fue resuelto o ya no está pendiente."))?
     };
 
-    let evaluacion = validation::evaluar_entrega(&state.pool, &sql, &ticket.sql_dorada, ticket.requiere_orden)
+    let pool = state.0.lock().unwrap().clone();
+    let evaluacion = validation::evaluar_entrega(&pool, &sql, &ticket.sql_dorada, ticket.requiere_orden)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -255,6 +260,69 @@ fn cerrar_dia(jugador: tauri::State<'_, Jugador>, turno_state: tauri::State<'_, 
     EstadoTurnoView::from(&*manejado)
 }
 
+/// Carga `company` (Etapa 11-G, Plan 8) y reconstruye el turno/catálogo para
+/// ella — aislado de `confirmar_transicion_agencia` para poder probarse
+/// contra Postgres embebido real sin pasar por el estado de Tauri. No toca
+/// `EstadoJugador` directamente (solo lee `rango`, por valor) para que el
+/// llamador nunca necesite mantener el lock de `Jugador` abierto durante el
+/// `.await`.
+async fn transicionar_a_empresa(
+    pg: &postgresql_embedded::PostgreSQL,
+    company: db::Company,
+    rango: tickets::Rango,
+) -> anyhow::Result<(sqlx::PgPool, TurnoManejado)> {
+    let pool = db::load_company(pg, company).await?;
+    let catalogo = tickets::catalogo(company);
+    let elegibles = tickets::tickets_elegibles(&catalogo, rango);
+    let (actual, indice_siguiente) = turno::EstadoTurno::nuevo(&elegibles, 0);
+    Ok((
+        pool,
+        TurnoManejado {
+            catalogo,
+            indice_siguiente,
+            actual,
+            fase: FaseArco::TrabajoNormal,
+        },
+    ))
+}
+
+/// Confirma la transición de la Agencia (Etapa 9/11-G, Plan 8): solo el
+/// único destino del MVP, Postafeta. Falla si el arco todavía no está
+/// completo. Resetea la reputación a 0 (Etapa 12: "eres el nuevo") — dinero,
+/// XP por arquetipo, perks y rango se mantienen intactos.
+#[tauri::command]
+async fn confirmar_transicion_agencia(
+    state: tauri::State<'_, AppState>,
+    jugador: tauri::State<'_, Jugador>,
+    turno_state: tauri::State<'_, Turno>,
+    embedded: tauri::State<'_, EmbeddedPostgres>,
+) -> Result<EstadoTurnoView, String> {
+    {
+        let manejado = turno_state.0.lock().unwrap();
+        if manejado.fase != FaseArco::ArcoCompletado {
+            return Err("El arco de la empresa todavía no está completo.".to_string());
+        }
+    }
+
+    let rango = jugador.0.lock().unwrap().rango;
+
+    let pg = embedded
+        .0
+        .lock()
+        .unwrap()
+        .take()
+        .ok_or_else(|| "Postgres embebido no está disponible.".to_string())?;
+    let resultado = transicionar_a_empresa(&pg, db::Company::Postafeta, rango).await;
+    embedded.0.lock().unwrap().replace(pg);
+    let (pool, nuevo_manejado) = resultado.map_err(|e| e.to_string())?;
+
+    jugador.0.lock().unwrap().reputacion = 0.0;
+    *state.0.lock().unwrap() = pool;
+    *turno_state.0.lock().unwrap() = nuevo_manejado;
+
+    Ok(EstadoTurnoView::from(&*turno_state.0.lock().unwrap()))
+}
+
 #[tauri::command]
 fn catalogo_perks(jugador: tauri::State<'_, Jugador>) -> Vec<PerkConEstado> {
     let estado = jugador.0.lock().unwrap();
@@ -292,6 +360,7 @@ pub fn run() {
             run_query,
             resolver_ticket,
             cerrar_dia,
+            confirmar_transicion_agencia,
             catalogo_perks,
             desbloquear_perk,
             equipar_perk,
@@ -317,7 +386,7 @@ pub fn run() {
                 // Join/Agregación en su primera bandeja.
                 let elegibles = tickets::tickets_elegibles(&catalogo, jugador_inicial.rango);
                 let (turno_inicial, indice_siguiente) = turno::EstadoTurno::nuevo(&elegibles, 0);
-                handle.manage(AppState { pool });
+                handle.manage(AppState(Mutex::new(pool)));
                 handle.manage(Jugador(Mutex::new(jugador_inicial)));
                 handle.manage(Turno(Mutex::new(TurnoManejado {
                     catalogo,
@@ -477,5 +546,24 @@ mod tests {
 
         assert_eq!(manejado.fase, FaseArco::ArcoCompletado);
         assert!(manejado.actual.pendientes.is_empty());
+    }
+
+    #[tokio::test]
+    async fn transicionar_a_empresa_resetea_el_turno_y_arma_el_catalogo_de_la_nueva_empresa() {
+        let pg = db::init_embedded_postgres().await.expect("Postgres embebido debe arrancar");
+
+        let (pool, manejado) = transicionar_a_empresa(&pg, db::Company::Postafeta, Rango::AuxiliarDeSistemas)
+            .await
+            .expect("la transición a Postafeta debe completarse");
+
+        assert_eq!(manejado.fase, FaseArco::TrabajoNormal);
+        assert_eq!(manejado.catalogo.len(), 6, "catálogo completo de Postafeta");
+        assert!(!manejado.actual.pendientes.is_empty(), "debe armar un turno inicial en la empresa nueva");
+
+        let paquetes = db::run_query(&pool, "SELECT * FROM paquetes").await.expect("Postafeta debe responder queries");
+        assert_eq!(paquetes.rows.len(), 30, "el pool devuelto debe apuntar a la base de datos de Postafeta");
+
+        pool.close().await;
+        pg.stop().await.expect("Postgres debe detenerse limpiamente");
     }
 }

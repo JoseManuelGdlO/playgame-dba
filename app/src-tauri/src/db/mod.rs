@@ -12,9 +12,6 @@ use sqlx::{PgPool, Row};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Company {
     HospitalArcangel,
-    // Se construye desde lib.rs cuando el cambio de empresa (Etapa 11-G) esté
-    // implementado; por ahora solo se usa en tests.
-    #[allow(dead_code)]
     Postafeta,
 }
 
