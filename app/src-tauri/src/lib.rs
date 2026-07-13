@@ -2,6 +2,13 @@ mod db;
 mod economia;
 mod perks;
 mod tickets;
+// `buscar_pendiente` (usado antes por `resolver_ticket`) quedó sin llamadores
+// tras el fix de doble envío en `resolver_ticket` (ver ese comando): ahora se
+// usa `resolver` como operación atómica de "check-and-remove" en su lugar.
+// Se permite dead_code en vez de borrar el método de `turno/mod.rs` — ese
+// archivo queda fuera del alcance de este fix y el método sigue siendo una
+// utilidad de lectura legítima de `EstadoTurno`.
+#[allow(dead_code)]
 mod turno;
 mod validation;
 
@@ -110,13 +117,20 @@ async fn resolver_ticket(
     id: String,
     sql: String,
 ) -> Result<ScoreResult, String> {
+    // Se retira el ticket de `pendientes` ANTES de validar/premiar (en vez de
+    // solo consultarlo con `buscar_pendiente`) para que un doble envío
+    // concurrente del mismo ticket (p. ej. doble clic en "✓ Enviar ticket"
+    // antes de que resuelva la primera promesa) sea imposible de premiar dos
+    // veces: `resolver` es la operación atómica de "check-and-remove" bajo
+    // este mismo lock, así que solo la primera llamada puede obtener
+    // `Some(ticket)` — la segunda ve `None` y falla aquí, antes de tocar
+    // `Jugador` o correr validación/economía.
     let ticket = {
-        let manejado = turno_state.0.lock().unwrap();
+        let mut manejado = turno_state.0.lock().unwrap();
         manejado
             .actual
-            .buscar_pendiente(&id)
-            .cloned()
-            .ok_or_else(|| format!("'{id}' no es un ticket pendiente de este turno."))?
+            .resolver(&id)
+            .ok_or_else(|| format!("'{id}' ya fue resuelto o ya no está pendiente."))?
     };
 
     let evaluacion = validation::evaluar_entrega(&state.pool, &sql, &ticket.sql_dorada, ticket.requiere_orden)
@@ -130,8 +144,6 @@ async fn resolver_ticket(
     estado.aplicar_resultado(&resultado);
 
     let mut manejado = turno_state.0.lock().unwrap();
-    manejado.actual.resolver(&id);
-
     if manejado.actual.pendientes.is_empty() || manejado.actual.turno_agotado() {
         manejado.escalar_y_avanzar(&mut estado);
     }

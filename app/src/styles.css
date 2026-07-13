@@ -60,15 +60,6 @@ h2 {
   margin: 0 0 0.5rem;
 }
 
-.ticket pre {
-  background: #313244;
-  border-radius: 8px;
-  padding: 1rem;
-  white-space: pre-wrap;
-  font-family: inherit;
-  margin: 0;
-}
-
 textarea {
   width: 100%;
   min-height: 140px;
