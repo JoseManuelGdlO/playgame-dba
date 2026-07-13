@@ -99,6 +99,45 @@ button:active {
   background-color: #45475a;
 }
 
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+#pantalla-menu {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2rem;
+  background: radial-gradient(ellipse at center, #1e1e2e, #11111b);
+}
+
+#pantalla-menu h1 {
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 2rem;
+  letter-spacing: 0.15em;
+  color: #a6e3a1;
+}
+
+#pantalla-menu .subtitle {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+}
+
+#pantalla-menu .actions {
+  flex-direction: column;
+  align-items: center;
+  margin-top: 2rem;
+}
+
+#pantalla-menu .actions button {
+  width: 220px;
+}
+
 #btn-play {
   color: #a6e3a1;
   border-color: #a6e3a1;
