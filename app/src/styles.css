@@ -111,6 +111,8 @@ button:active {
 
 #status-msg {
   min-height: 1.2em;
+  margin: 0;
+  padding: 0.6rem 1.5rem;
 }
 
 #status-msg.ok {
