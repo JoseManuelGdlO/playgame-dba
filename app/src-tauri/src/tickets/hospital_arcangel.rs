@@ -15,6 +15,22 @@ pub(crate) fn catalogo() -> Vec<Ticket> {
             "SELECT nombre, fecha_ingreso, diagnostico FROM pacientes WHERE departamento_id = 1 ORDER BY fecha_ingreso DESC",
             10,
         ),
+        plantilla_reporte_simple(
+            "hospital_reporte_habitaciones_libres",
+            "Enfermería",
+            "Enfermería necesita saber qué camas están libres antes de que llegue el siguiente turno de admisiones.",
+            "Lista el número y el tipo de cada habitación que esté libre (no ocupada), ordenadas por número.",
+            "SELECT numero, tipo FROM habitaciones WHERE ocupada = false ORDER BY numero",
+            10,
+        ),
+        plantilla_reporte_simple(
+            "hospital_reporte_pacientes_sin_alta",
+            "Auditoría de Calidad",
+            "Auditoría de Calidad necesita confirmar cuántos pacientes siguen internados para su reporte semanal de ocupación.",
+            "Lista el nombre y la fecha de ingreso de los pacientes que todavía no tienen fecha de alta, del ingreso más antiguo al más reciente.",
+            "SELECT nombre, fecha_ingreso FROM pacientes WHERE fecha_alta IS NULL ORDER BY fecha_ingreso, nombre",
+            10,
+        ),
         plantilla_reporte_agregado(
             "hospital_reporte_costo_por_tipo",
             "Dirección General",
@@ -69,12 +85,12 @@ mod tests {
     use crate::validation;
 
     #[test]
-    fn catalogo_tiene_4_reportes_y_2_depuraciones() {
+    fn catalogo_tiene_6_reportes_y_2_depuraciones() {
         let tickets = catalogo();
-        assert_eq!(tickets.len(), 6);
+        assert_eq!(tickets.len(), 8);
         let reportes = tickets.iter().filter(|t| t.tipo == TipoTicket::ReporteAnalisis).count();
         let depuraciones = tickets.iter().filter(|t| t.tipo == TipoTicket::InvestigacionDepuracion).count();
-        assert_eq!(reportes, 4);
+        assert_eq!(reportes, 6, "4 originales + 2 Select-only agregados para Becario (Plan 7)");
         assert_eq!(depuraciones, 2);
     }
 

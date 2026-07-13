@@ -287,8 +287,12 @@ mod tests {
     }
 
     #[test]
-    fn catalogo_devuelve_6_tickets_para_cada_empresa() {
-        assert_eq!(catalogo(crate::db::Company::HospitalArcangel).len(), 6);
+    fn catalogo_devuelve_el_tamano_esperado_por_empresa() {
+        assert_eq!(
+            catalogo(crate::db::Company::HospitalArcangel).len(),
+            8,
+            "Plan 7 agrega 2 tickets Select-only para que Becario tenga bandeja"
+        );
         assert_eq!(catalogo(crate::db::Company::Postafeta).len(), 6);
     }
 }
