@@ -66,6 +66,44 @@ pub fn calcular(evaluacion: &Evaluacion, ticket: &Ticket, multiplicador_perks: f
     }
 }
 
+/// Estado acumulado del jugador (Etapa 12): dinero, reputación y XP por
+/// arquetipo ganados a lo largo de la partida, más el stub de un solo perk
+/// heredado del spike original (Etapa 13 lo reemplaza en un plan posterior).
+#[derive(Debug, Clone, Default)]
+pub struct EstadoJugador {
+    pub dinero: i64,
+    pub reputacion: f64,
+    pub xp_por_arquetipo: Vec<(Arquetipo, i64)>,
+    pub perk_desbloqueado: bool,
+}
+
+/// Umbral de reputación para ascender de Becario a Auxiliar de Sistemas en
+/// Hospital Arcángel (Etapa 10). El ascenso real (superar el mini-boss,
+/// cambiar de rango) es responsabilidad de un plan posterior — esta
+/// constante solo define cuándo se cumple la condición de reputación.
+const UMBRAL_ASCENSO_AUXILIAR: f64 = 500.0;
+
+impl EstadoJugador {
+    /// Aplica el resultado de una entrega (Etapa 12): acumula dinero,
+    /// reputación y XP por arquetipo sobre el estado existente.
+    pub fn aplicar_resultado(&mut self, resultado: &Resultado) {
+        self.dinero += resultado.dinero_ganado;
+        self.reputacion += resultado.reputacion_ganada;
+        for &(arquetipo, xp) in &resultado.xp_ganado {
+            match self.xp_por_arquetipo.iter_mut().find(|(a, _)| *a == arquetipo) {
+                Some((_, existente)) => *existente += xp,
+                None => self.xp_por_arquetipo.push((arquetipo, xp)),
+            }
+        }
+    }
+
+    /// Etapa 10: señal de que la reputación ya cruzó el umbral de ascenso —
+    /// no dispara ningún cambio de estado por sí sola.
+    pub fn puede_ascender(&self) -> bool {
+        self.reputacion >= UMBRAL_ASCENSO_AUXILIAR
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -158,5 +196,57 @@ mod tests {
 
         assert_eq!(resultado.puntaje_final, 200.0);
         assert_eq!(resultado.dinero_ganado, 200);
+    }
+
+    #[test]
+    fn aplicar_resultado_acumula_dinero_reputacion_y_xp() {
+        let mut estado = EstadoJugador::default();
+        let resultado = Resultado {
+            puntaje_base: 100.0,
+            puntaje_final: 100.0,
+            dinero_ganado: 100,
+            reputacion_ganada: 0.5,
+            xp_ganado: vec![(Arquetipo::Select, 10)],
+        };
+
+        estado.aplicar_resultado(&resultado);
+
+        assert_eq!(estado.dinero, 100);
+        assert_eq!(estado.reputacion, 0.5);
+        assert_eq!(estado.xp_por_arquetipo, vec![(Arquetipo::Select, 10)]);
+    }
+
+    #[test]
+    fn aplicar_resultado_suma_xp_al_mismo_arquetipo_en_llamadas_sucesivas() {
+        let mut estado = EstadoJugador::default();
+        let resultado = Resultado {
+            puntaje_base: 100.0,
+            puntaje_final: 100.0,
+            dinero_ganado: 100,
+            reputacion_ganada: 0.5,
+            xp_ganado: vec![(Arquetipo::Select, 10)],
+        };
+
+        estado.aplicar_resultado(&resultado);
+        estado.aplicar_resultado(&resultado);
+
+        assert_eq!(estado.dinero, 200);
+        assert_eq!(
+            estado.xp_por_arquetipo,
+            vec![(Arquetipo::Select, 20)],
+            "debe acumular en la misma entrada, no duplicarla"
+        );
+    }
+
+    #[test]
+    fn puede_ascender_es_false_bajo_el_umbral_y_true_al_cruzarlo() {
+        let mut estado = EstadoJugador::default();
+        assert!(!estado.puede_ascender());
+
+        estado.reputacion = 499.9;
+        assert!(!estado.puede_ascender());
+
+        estado.reputacion = 500.0;
+        assert!(estado.puede_ascender());
     }
 }
