@@ -43,7 +43,7 @@ struct TransicionEnCurso(std::sync::atomic::AtomicBool);
 /// que el jugador confirme la transición de la Agencia). Deliberadamente
 /// específica del único mini-boss del MVP — no es un sistema genérico para
 /// más empresas (Fase 1+).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 enum FaseArco {
     TrabajoNormal,
     MiniBoss,

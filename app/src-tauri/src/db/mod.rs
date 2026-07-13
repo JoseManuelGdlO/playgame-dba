@@ -9,7 +9,7 @@ use sqlx::{PgPool, Row};
 /// Empresa activa: cada una vive en su propia base de datos dentro del mismo
 /// servidor Postgres embebido (Etapa 11-G: el esquema cambia por completo al
 /// cambiar de empresa; el progreso de rango/perks vive fuera de este módulo).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Company {
     HospitalArcangel,
     Postafeta,

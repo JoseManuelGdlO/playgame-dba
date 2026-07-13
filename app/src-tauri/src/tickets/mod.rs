@@ -46,7 +46,7 @@ pub enum Prioridad {
     Urgente,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Arquetipo {
     Select,
     Join,
@@ -56,7 +56,7 @@ pub enum Arquetipo {
 /// Rango de carrera del jugador (Etapa 10, Plan 7): determina qué tickets
 /// del catálogo puede recibir en su bandeja. El orden de declaración importa
 /// — el derive de `Ord` decide qué rango "alcanza" a cuál según ese orden.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, serde::Serialize, serde::Deserialize)]
 pub enum Rango {
     #[default]
     Becario,
