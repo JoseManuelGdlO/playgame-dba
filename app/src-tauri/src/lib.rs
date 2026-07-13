@@ -821,4 +821,67 @@ mod tests {
         pool.close().await;
         pg.stop().await.expect("Postgres debe detenerse limpiamente");
     }
+
+    /// Plan 9 (finding de code review): `resolver_tickets_guardados` no tenía
+    /// cobertura propia. En `TrabajoNormal` debe reconstruir contra el
+    /// catálogo completo de la empresa, preservando el orden de los ids
+    /// guardados (no el orden del catálogo).
+    #[test]
+    fn resolver_tickets_guardados_en_trabajo_normal_usa_el_catalogo_completo() {
+        let ids = vec![
+            "hospital_reporte_habitaciones_libres".to_string(),
+            "hospital_reporte_pacientes_cardiologia".to_string(),
+        ];
+
+        let resueltos = resolver_tickets_guardados(db::Company::HospitalArcangel, FaseArco::TrabajoNormal, &ids);
+
+        assert_eq!(resueltos.len(), 2);
+        assert_eq!(resueltos[0].id, "hospital_reporte_habitaciones_libres");
+        assert_eq!(resueltos[1].id, "hospital_reporte_pacientes_cardiologia");
+    }
+
+    /// Cualquier fase distinta de `TrabajoNormal` (tanto `MiniBoss` como
+    /// `ArcoCompletado`, el jugador puede haber guardado a mitad de
+    /// cualquiera de las dos) debe resolver contra el lote del mini-boss,
+    /// no contra el catálogo normal de 8 tickets.
+    #[test]
+    fn resolver_tickets_guardados_fuera_de_trabajo_normal_usa_el_lote_del_mini_boss() {
+        let ids_mini_boss = vec![
+            "hospital_miniboss_pacientes_sin_seguro".to_string(),
+            "hospital_miniboss_tratamientos_por_tipo".to_string(),
+        ];
+
+        for fase in [FaseArco::MiniBoss, FaseArco::ArcoCompletado] {
+            let resueltos = resolver_tickets_guardados(db::Company::HospitalArcangel, fase, &ids_mini_boss);
+            assert_eq!(resueltos.len(), 2, "fase {fase:?} debe resolver ambos ids del mini-boss");
+            assert_eq!(resueltos[0].id, "hospital_miniboss_pacientes_sin_seguro");
+            assert_eq!(resueltos[1].id, "hospital_miniboss_tratamientos_por_tipo");
+        }
+
+        // Un id que sólo existe en el catálogo normal no debe resolver
+        // mientras la fase no sea TrabajoNormal: confirma que de verdad se
+        // está buscando en el lote del mini-boss y no en el catálogo de 8.
+        let ids_catalogo_normal = vec!["hospital_reporte_pacientes_cardiologia".to_string()];
+        let resueltos = resolver_tickets_guardados(db::Company::HospitalArcangel, FaseArco::MiniBoss, &ids_catalogo_normal);
+        assert!(
+            resueltos.is_empty(),
+            "un id exclusivo del catálogo normal no debe resolver contra el lote del mini-boss"
+        );
+    }
+
+    /// Un id guardado que ya no existe en el catálogo correspondiente (por
+    /// ejemplo, un save stale de una versión anterior del contenido) debe
+    /// descartarse en silencio en vez de hacer panic o propagar un error.
+    #[test]
+    fn resolver_tickets_guardados_descarta_en_silencio_los_ids_desconocidos() {
+        let ids = vec![
+            "hospital_reporte_pacientes_cardiologia".to_string(),
+            "id_que_no_existe".to_string(),
+        ];
+
+        let resueltos = resolver_tickets_guardados(db::Company::HospitalArcangel, FaseArco::TrabajoNormal, &ids);
+
+        assert_eq!(resueltos.len(), 1);
+        assert_eq!(resueltos[0].id, "hospital_reporte_pacientes_cardiologia");
+    }
 }
