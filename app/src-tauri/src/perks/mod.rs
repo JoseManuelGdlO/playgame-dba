@@ -132,7 +132,11 @@ pub fn catalogo() -> &'static [Perk] {
     &CATALOGO
 }
 
-/// Busca un perk por id en el catálogo.
+/// Busca un perk por id en el catálogo. Hoy solo lo usan los tests de este
+/// módulo y de `economia` (Etapa 13, Plan 5) — se mantiene `pub` porque es
+/// parte de la API pública del catálogo y un llamador real (comando Tauri o
+/// UI) es un uso natural futuro, no un descuido.
+#[allow(dead_code)]
 pub fn buscar(id: &str) -> Option<&'static Perk> {
     CATALOGO.iter().find(|p| p.id == id)
 }

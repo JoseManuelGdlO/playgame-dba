@@ -12,9 +12,7 @@ struct AppState {
     pool: sqlx::PgPool,
 }
 
-/// Estado de economía del jugador (Etapa 12), gestionado por Tauri. El bool
-/// de perk es el mismo stub heredado del spike — el sistema RPG real
-/// (Etapa 13) lo reemplaza en un plan posterior.
+/// Estado de economía del jugador (Etapa 12/13), gestionado por Tauri.
 struct Jugador(Mutex<economia::EstadoJugador>);
 
 /// Mantiene vivo el servidor Postgres embebido y permite detenerlo al salir.
@@ -46,10 +44,34 @@ struct ScoreResult {
     mensaje: String,
 }
 
+/// Vista combinada de un perk (Etapa 13): datos estáticos del catálogo +
+/// estado dinámico del jugador frente a él.
 #[derive(serde::Serialize)]
-struct PerkStatus {
-    unlocked: bool,
-    dinero_total: i64,
+struct PerkConEstado {
+    id: &'static str,
+    nombre: &'static str,
+    categoria: perks::Categoria,
+    descripcion: &'static str,
+    costo_dinero: i64,
+    reputacion_minima: f64,
+    desbloqueado: bool,
+    equipado: bool,
+}
+
+fn vista_perks(estado: &economia::EstadoJugador) -> Vec<PerkConEstado> {
+    perks::catalogo()
+        .iter()
+        .map(|perk| PerkConEstado {
+            id: perk.id,
+            nombre: perk.nombre,
+            categoria: perk.categoria,
+            descripcion: perk.descripcion,
+            costo_dinero: perk.costo_dinero,
+            reputacion_minima: perk.reputacion_minima,
+            desbloqueado: estado.perks_desbloqueados.contains(&perk.id),
+            equipado: estado.perks_equipados.contains(&perk.id),
+        })
+        .collect()
 }
 
 #[tauri::command]
@@ -77,9 +99,10 @@ async fn submit_ticket(
         .await
         .map_err(|e| e.to_string())?;
 
-    let resultado = economia::calcular(&evaluacion, &ticket, 1.0);
-
     let mut estado = jugador.0.lock().unwrap();
+    let multiplicador_dinero = estado.multiplicador_dinero(perks::catalogo());
+    let multiplicador_reputacion = estado.multiplicador_reputacion(perks::catalogo());
+    let resultado = economia::calcular(&evaluacion, &ticket, multiplicador_dinero, multiplicador_reputacion);
     estado.aplicar_resultado(&resultado);
 
     if evaluacion.correcta {
@@ -100,10 +123,6 @@ async fn submit_ticket(
         reputacion_ganada: resultado.reputacion_ganada,
         reputacion_total: estado.reputacion,
         xp_ganado: resultado.xp_ganado,
-        // Etapa 10, deliberadamente recortado: solo se expone la señal de que
-        // la reputación ya cruzó el umbral de ascenso — no dispara ningún
-        // evento de ascenso (mini-boss, cambio de rango), que queda para un
-        // plan posterior.
         puede_ascender: estado.puede_ascender(),
         mensaje: if evaluacion.correcta {
             "Ticket resuelto. Contabilidad procesará tu pago... eventualmente.".to_string()
@@ -114,21 +133,30 @@ async fn submit_ticket(
 }
 
 #[tauri::command]
-fn unlock_perk(jugador: tauri::State<'_, Jugador>) -> Result<PerkStatus, String> {
-    const COSTO: i64 = 300;
+fn catalogo_perks(jugador: tauri::State<'_, Jugador>) -> Vec<PerkConEstado> {
+    let estado = jugador.0.lock().unwrap();
+    vista_perks(&estado)
+}
+
+#[tauri::command]
+fn desbloquear_perk(jugador: tauri::State<'_, Jugador>, id: String) -> Result<Vec<PerkConEstado>, String> {
     let mut estado = jugador.0.lock().unwrap();
-    if estado.perk_desbloqueado {
-        return Ok(PerkStatus { unlocked: true, dinero_total: estado.dinero });
-    }
-    if estado.dinero < COSTO {
-        return Err(format!(
-            "No tienes suficiente dinero para este perk (cuesta {COSTO}, tienes {}).",
-            estado.dinero
-        ));
-    }
-    estado.dinero -= COSTO;
-    estado.perk_desbloqueado = true;
-    Ok(PerkStatus { unlocked: true, dinero_total: estado.dinero })
+    estado.desbloquear_perk(perks::catalogo(), &id)?;
+    Ok(vista_perks(&estado))
+}
+
+#[tauri::command]
+fn equipar_perk(jugador: tauri::State<'_, Jugador>, id: String) -> Result<Vec<PerkConEstado>, String> {
+    let mut estado = jugador.0.lock().unwrap();
+    estado.equipar_perk(&id)?;
+    Ok(vista_perks(&estado))
+}
+
+#[tauri::command]
+fn desequipar_perk(jugador: tauri::State<'_, Jugador>, id: String) -> Vec<PerkConEstado> {
+    let mut estado = jugador.0.lock().unwrap();
+    estado.desequipar_perk(&id);
+    vista_perks(&estado)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -139,7 +167,10 @@ pub fn run() {
             ticket_actual,
             run_query,
             submit_ticket,
-            unlock_perk
+            catalogo_perks,
+            desbloquear_perk,
+            equipar_perk,
+            desequipar_perk
         ])
         .setup(|app| {
             let handle = app.handle().clone();

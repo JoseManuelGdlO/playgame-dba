@@ -14,7 +14,7 @@
         <h1>Query Path <span class="subtitle">— spike técnico (Tauri + Postgres embebido)</span></h1>
         <div class="stats">
           <span>💰 <span id="dinero">0</span></span>
-          <span id="perk-indicator" class="perk-locked">🔒 Perk: Café Cargado</span>
+          <span>⭐ <span id="reputacion">0</span></span>
         </div>
       </header>
 
@@ -28,8 +28,17 @@
         <div class="actions">
           <button id="btn-play">▶ Play</button>
           <button id="btn-submit">✓ Enviar ticket</button>
-          <button id="btn-unlock-perk">Desbloquear perk (300)</button>
         </div>
+      </section>
+
+      <section class="perks">
+        <h2>Perks</h2>
+        <select id="perks-select"></select>
+        <div class="actions">
+          <button id="btn-unlock-perk">Desbloquear</button>
+          <button id="btn-equip-perk">Equipar/Desequipar</button>
+        </div>
+        <p id="perks-equipados-msg"></p>
       </section>
 
       <section class="output">

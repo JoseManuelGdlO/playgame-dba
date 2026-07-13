@@ -1,6 +1,7 @@
 const { invoke } = window.__TAURI__.core;
 
-let sqlInput, statusMsg, resultTable, dineroEl, perkIndicator, ticketEnunciado;
+let sqlInput, statusMsg, resultTable, dineroEl, reputacionEl, ticketEnunciado;
+let perksSelect, perksEquipadosMsg;
 
 function renderRows(rows) {
   resultTable.innerHTML = "";
@@ -57,20 +58,55 @@ async function submitTicket() {
   try {
     const score = await invoke("submit_ticket", { sql: sqlInput.value });
     dineroEl.textContent = score.dinero_total;
+    reputacionEl.textContent = score.reputacion_total.toFixed(1);
     setStatus(score.mensaje, score.pass ? "ok" : "error");
   } catch (err) {
     setStatus(String(err), "error");
   }
 }
 
-async function unlockPerk() {
+function renderPerks(perks) {
+  const seleccionado = perksSelect.value;
+  perksSelect.innerHTML = "";
+  for (const perk of perks) {
+    const opt = document.createElement("option");
+    opt.value = perk.id;
+    const estado = perk.equipado ? "⭐ equipado" : perk.desbloqueado ? "✅ desbloqueado" : "🔒 bloqueado";
+    opt.textContent = `${perk.nombre} (${perk.categoria}) — ${estado} — $${perk.costo_dinero}, ⭐${perk.reputacion_minima}`;
+    perksSelect.appendChild(opt);
+  }
+  if (seleccionado) perksSelect.value = seleccionado;
+
+  const equipados = perks.filter((p) => p.equipado).map((p) => p.nombre);
+  perksEquipadosMsg.textContent = equipados.length ? `Equipados: ${equipados.join(", ")}` : "Ningún perk equipado.";
+}
+
+async function cargarPerks() {
+  const perks = await invoke("catalogo_perks");
+  renderPerks(perks);
+}
+
+async function desbloquearPerkSeleccionado() {
+  const id = perksSelect.value;
+  if (!id) return;
   try {
-    const status = await invoke("unlock_perk");
-    dineroEl.textContent = status.dinero_total;
-    if (status.unlocked) {
-      perkIndicator.textContent = "✅ Perk: Café Cargado";
-      perkIndicator.className = "perk-unlocked";
-    }
+    const perks = await invoke("desbloquear_perk", { id });
+    renderPerks(perks);
+    setStatus("Perk desbloqueado.", "ok");
+  } catch (err) {
+    setStatus(String(err), "error");
+  }
+}
+
+async function equiparODesequiparPerkSeleccionado() {
+  const id = perksSelect.value;
+  if (!id) return;
+  const actual = (await invoke("catalogo_perks")).find((p) => p.id === id);
+  try {
+    const perks = actual && actual.equipado
+      ? await invoke("desequipar_perk", { id })
+      : await invoke("equipar_perk", { id });
+    renderPerks(perks);
   } catch (err) {
     setStatus(String(err), "error");
   }
@@ -81,14 +117,19 @@ window.addEventListener("DOMContentLoaded", async () => {
   statusMsg = document.querySelector("#status-msg");
   resultTable = document.querySelector("#result-table");
   dineroEl = document.querySelector("#dinero");
-  perkIndicator = document.querySelector("#perk-indicator");
+  reputacionEl = document.querySelector("#reputacion");
   ticketEnunciado = document.querySelector("#ticket-enunciado");
+  perksSelect = document.querySelector("#perks-select");
+  perksEquipadosMsg = document.querySelector("#perks-equipados-msg");
 
   const ticket = await invoke("ticket_actual");
   ticketEnunciado.textContent = `Motivo: ${ticket.motivo}\nSolicitud: ${ticket.solicitud}`;
   sqlInput.value = ticket.sql_inicial || "SELECT * FROM pacientes;";
 
+  await cargarPerks();
+
   document.querySelector("#btn-play").addEventListener("click", runQuery);
   document.querySelector("#btn-submit").addEventListener("click", submitTicket);
-  document.querySelector("#btn-unlock-perk").addEventListener("click", unlockPerk);
+  document.querySelector("#btn-unlock-perk").addEventListener("click", desbloquearPerkSeleccionado);
+  document.querySelector("#btn-equip-perk").addEventListener("click", equiparODesequiparPerkSeleccionado);
 });
