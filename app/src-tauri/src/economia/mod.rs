@@ -1,3 +1,4 @@
+use crate::perks::{Efecto, Perk};
 use crate::tickets::{Arquetipo, Ticket};
 use crate::validation::Evaluacion;
 
@@ -24,17 +25,30 @@ pub struct Resultado {
 }
 
 /// Calcula dinero/reputación/XP ganados por una entrega, siguiendo la
-/// fórmula literal de la Etapa 12. `multiplicador_perks` representa el
-/// efecto de los perks activos del jugador — fijo en 1.0 hasta que exista el
-/// sistema RPG real (Etapa 13, plan posterior). Si la entrega es incorrecta,
-/// no se otorga dinero/reputación/XP (la penalización por tickets escalados
-/// es solo de reputación y depende del sistema de turnos, Etapa 11-A, no
-/// construido — este cálculo no la implementa).
-pub fn calcular(evaluacion: &Evaluacion, ticket: &Ticket, multiplicador_perks: f64) -> Resultado {
+/// fórmula literal de la Etapa 12. `multiplicador_dinero`/`multiplicador_reputacion`
+/// representan el efecto de los perks de la categoría Billetera y Fama
+/// actualmente equipados (Etapa 13, Plan 5) — cada uno 1.0 si no hay ninguno
+/// activo. A diferencia del multiplicador único que existía antes de la
+/// Etapa 13, cada recurso escala por separado porque los perks reales
+/// afectan solo uno de los dos ("Buena Fama" solo reputación, "Bono Bajo la
+/// Mesa" solo dinero) — un multiplicador compartido los volvería
+/// indistinguibles. Si la entrega es incorrecta, no se otorga
+/// dinero/reputación/XP (la penalización por tickets escalados es solo de
+/// reputación y depende del sistema de turnos, Etapa 11-A, no construido —
+/// este cálculo no la implementa).
+pub fn calcular(
+    evaluacion: &Evaluacion,
+    ticket: &Ticket,
+    multiplicador_dinero: f64,
+    multiplicador_reputacion: f64,
+) -> Resultado {
     let puntaje_base = evaluacion.puntaje_correctitud * ticket.peso_correctitud
         + evaluacion.puntaje_velocidad * ticket.peso_velocidad
         + evaluacion.puntaje_practicas * ticket.peso_practicas;
-    let puntaje_final = puntaje_base * multiplicador_perks;
+    // Ya no hay un multiplicador genérico compartido (Etapa 13, Plan 5): los
+    // perks con efecto real escalan dinero/reputación por separado, más
+    // abajo — puntaje_final se mantiene igual a puntaje_base.
+    let puntaje_final = puntaje_base;
 
     if !evaluacion.correcta {
         return Resultado {
@@ -46,8 +60,10 @@ pub fn calcular(evaluacion: &Evaluacion, ticket: &Ticket, multiplicador_perks: f
         };
     }
 
-    let dinero_ganado = (puntaje_final * ticket.valor_base as f64 / 100.0).round() as i64;
-    let reputacion_ganada = puntaje_final * ticket.factor_reputacion / 100.0;
+    let dinero_ganado =
+        (puntaje_final * ticket.valor_base as f64 / 100.0 * multiplicador_dinero).round() as i64;
+    let reputacion_ganada =
+        puntaje_final * ticket.factor_reputacion / 100.0 * multiplicador_reputacion;
     let xp_ganado = ticket
         .arquetipos
         .iter()
@@ -66,15 +82,20 @@ pub fn calcular(evaluacion: &Evaluacion, ticket: &Ticket, multiplicador_perks: f
     }
 }
 
-/// Estado acumulado del jugador (Etapa 12): dinero, reputación y XP por
-/// arquetipo ganados a lo largo de la partida, más el stub de un solo perk
-/// heredado del spike original (Etapa 13 lo reemplaza en un plan posterior).
+/// Máximo de perks equipados simultáneamente (Etapa 19, MVP): 2 slots fijos.
+/// La escalera de hasta 7 slots por hito de rango (Etapa 13 completa) es de
+/// un plan posterior.
+const MAX_SLOTS_EQUIPADOS: usize = 2;
+
+/// Estado acumulado del jugador (Etapa 12/13): dinero, reputación, XP por
+/// arquetipo, y los perks desbloqueados/equipados.
 #[derive(Debug, Clone, Default)]
 pub struct EstadoJugador {
     pub dinero: i64,
     pub reputacion: f64,
     pub xp_por_arquetipo: Vec<(Arquetipo, i64)>,
-    pub perk_desbloqueado: bool,
+    pub perks_desbloqueados: Vec<&'static str>,
+    pub perks_equipados: Vec<&'static str>,
 }
 
 /// Umbral de reputación para ascender de Becario a Auxiliar de Sistemas en
@@ -102,11 +123,106 @@ impl EstadoJugador {
     pub fn puede_ascender(&self) -> bool {
         self.reputacion >= UMBRAL_ASCENSO_AUXILIAR
     }
+
+    /// Etapa 13: un perk se desbloquea cuando se cumplen 3 condiciones a la
+    /// vez — dinero suficiente, reputación mínima, y maestría (XP) suficiente
+    /// en el arquetipo que ese perk requiere.
+    pub fn puede_desbloquear(&self, perk: &Perk) -> bool {
+        let xp_en_arquetipo = self
+            .xp_por_arquetipo
+            .iter()
+            .find(|&&(a, _)| a == perk.arquetipo_requerido)
+            .map(|&(_, xp)| xp)
+            .unwrap_or(0);
+
+        self.dinero >= perk.costo_dinero
+            && self.reputacion >= perk.reputacion_minima
+            && xp_en_arquetipo >= perk.xp_minimo
+    }
+
+    /// Desbloquea un perk permanentemente (Etapa 13): gasta el dinero, no
+    /// toca la reputación ni el XP (esos solo se verifican, nunca se
+    /// consumen). Idempotente si ya estaba desbloqueado.
+    pub fn desbloquear_perk(&mut self, catalogo: &[Perk], id: &str) -> Result<(), String> {
+        if self.perks_desbloqueados.contains(&id) {
+            return Ok(());
+        }
+        let perk = catalogo
+            .iter()
+            .find(|p| p.id == id)
+            .ok_or_else(|| format!("perk desconocido: {id}"))?;
+        if !self.puede_desbloquear(perk) {
+            return Err(format!("No cumples los requisitos para '{}' todavía.", perk.nombre));
+        }
+        self.dinero -= perk.costo_dinero;
+        self.perks_desbloqueados.push(perk.id);
+        Ok(())
+    }
+
+    /// Equipa un perk ya desbloqueado (Etapa 11-D: equipar es gratis).
+    /// Falla si no está desbloqueado, o si ya se ocuparon los 2 slots.
+    /// Idempotente si ya estaba equipado.
+    pub fn equipar_perk(&mut self, id: &str) -> Result<(), String> {
+        if !self.perks_desbloqueados.contains(&id) {
+            return Err(format!("'{id}' no está desbloqueado todavía."));
+        }
+        if self.perks_equipados.contains(&id) {
+            return Ok(());
+        }
+        if self.perks_equipados.len() >= MAX_SLOTS_EQUIPADOS {
+            return Err(format!(
+                "Ya tienes {MAX_SLOTS_EQUIPADOS} perks equipados — desequipa uno primero."
+            ));
+        }
+        let id_estatico = self
+            .perks_desbloqueados
+            .iter()
+            .find(|&&d| d == id)
+            .copied()
+            .expect("ya se confirmó arriba que está desbloqueado");
+        self.perks_equipados.push(id_estatico);
+        Ok(())
+    }
+
+    /// Desequipa un perk (gratis, Etapa 11-D). No falla si no estaba
+    /// equipado.
+    pub fn desequipar_perk(&mut self, id: &str) {
+        self.perks_equipados.retain(|&equipado| equipado != id);
+    }
+
+    /// Multiplicador de dinero (Etapa 12/13) por los perks "Billetera y Fama"
+    /// actualmente equipados — 1.0 si ninguno está activo.
+    pub fn multiplicador_dinero(&self, catalogo: &[Perk]) -> f64 {
+        let mut multiplicador = 1.0;
+        for &id in &self.perks_equipados {
+            if let Some(perk) = catalogo.iter().find(|p| p.id == id) {
+                if let Efecto::BonoDinero(bono) = perk.efecto {
+                    multiplicador *= 1.0 + bono;
+                }
+            }
+        }
+        multiplicador
+    }
+
+    /// Multiplicador de reputación (Etapa 12/13) por los perks "Billetera y
+    /// Fama" actualmente equipados — 1.0 si ninguno está activo.
+    pub fn multiplicador_reputacion(&self, catalogo: &[Perk]) -> f64 {
+        let mut multiplicador = 1.0;
+        for &id in &self.perks_equipados {
+            if let Some(perk) = catalogo.iter().find(|p| p.id == id) {
+                if let Efecto::BonoReputacion(bono) = perk.efecto {
+                    multiplicador *= 1.0 + bono;
+                }
+            }
+        }
+        multiplicador
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::perks;
     use crate::tickets::{Prioridad, TipoTicket};
 
     fn ticket_de_prueba(arquetipos: Vec<Arquetipo>) -> Ticket {
@@ -145,7 +261,7 @@ mod tests {
         let ticket = ticket_de_prueba(vec![Arquetipo::Select]);
         let evaluacion = evaluacion_perfecta();
 
-        let resultado = calcular(&evaluacion, &ticket, 1.0);
+        let resultado = calcular(&evaluacion, &ticket, 1.0, 1.0);
 
         assert_eq!(resultado.puntaje_base, 100.0);
         assert_eq!(resultado.puntaje_final, 100.0);
@@ -160,7 +276,7 @@ mod tests {
         let mut evaluacion = evaluacion_perfecta();
         evaluacion.correcta = false;
 
-        let resultado = calcular(&evaluacion, &ticket, 1.0);
+        let resultado = calcular(&evaluacion, &ticket, 1.0, 1.0);
 
         assert_eq!(resultado.dinero_ganado, 0);
         assert_eq!(resultado.reputacion_ganada, 0.0);
@@ -179,7 +295,7 @@ mod tests {
         ticket.peso_practicas = 0.3;
         let evaluacion = evaluacion_perfecta();
 
-        let resultado = calcular(&evaluacion, &ticket, 1.0);
+        let resultado = calcular(&evaluacion, &ticket, 1.0, 1.0);
 
         assert_eq!(
             resultado.xp_ganado,
@@ -188,14 +304,18 @@ mod tests {
     }
 
     #[test]
-    fn calcular_aplica_el_multiplicador_de_perks() {
+    fn calcular_aplica_los_multiplicadores_de_dinero_y_reputacion_por_separado() {
         let ticket = ticket_de_prueba(vec![Arquetipo::Select]);
         let evaluacion = evaluacion_perfecta();
 
-        let resultado = calcular(&evaluacion, &ticket, 2.0);
+        let resultado = calcular(&evaluacion, &ticket, 2.0, 1.5);
 
-        assert_eq!(resultado.puntaje_final, 200.0);
-        assert_eq!(resultado.dinero_ganado, 200);
+        assert_eq!(
+            resultado.puntaje_final, 100.0,
+            "puntaje_final ya no lleva un multiplicador genérico"
+        );
+        assert_eq!(resultado.dinero_ganado, 200, "100 (valor_base) * 2.0");
+        assert_eq!(resultado.reputacion_ganada, 0.75, "0.5 (factor_reputacion) * 1.5");
     }
 
     #[test]
@@ -252,13 +372,6 @@ mod tests {
 
     #[test]
     fn calcular_distingue_cual_peso_multiplica_a_cual_puntaje() {
-        // Pesos y puntajes todos distintos entre sí (y todos fracciones
-        // binarias exactas: 0.5 = 1/2, 0.3125 = 5/16, 0.1875 = 3/16, para que
-        // la aritmética de punto flotante no introduzca error de redondeo y
-        // el assert_eq! sobre f64 sea seguro). Con pesos iguales (como en
-        // evaluacion_perfecta) un bug que intercambiara dos pesos en la
-        // fórmula seguiría dando puntaje_base = 100 y pasaría todos los
-        // demás tests; aquí el resultado cambia bajo cualquier intercambio.
         let mut ticket = ticket_de_prueba(vec![Arquetipo::Select]);
         ticket.peso_correctitud = 0.5;
         ticket.peso_velocidad = 0.3125;
@@ -271,29 +384,14 @@ mod tests {
             comentario_mentor: None,
         };
 
-        let resultado = calcular(&evaluacion, &ticket, 1.0);
+        let resultado = calcular(&evaluacion, &ticket, 1.0, 1.0);
 
-        // puntaje_base = 80*0.5 + 64*0.3125 + 32*0.1875
-        //              = 40.0  + 20.0      + 6.0
-        //              = 66.0
-        //
-        // Si dos pesos se intercambiaran en la fórmula el resultado sería
-        // distinto en todos los casos:
-        //   - swap correctitud<->velocidad: 80*0.3125 + 64*0.5    + 32*0.1875 = 63.0
-        //   - swap correctitud<->practicas: 80*0.1875 + 64*0.3125 + 32*0.5    = 51.0
-        //   - swap velocidad<->practicas:   80*0.5    + 64*0.1875 + 32*0.3125 = 62.0
-        // ninguno coincide con 66.0, así que este test detectaría el bug.
         assert_eq!(resultado.puntaje_base, 66.0);
         assert_eq!(resultado.puntaje_final, 66.0);
     }
 
     #[test]
     fn calcular_redondea_dinero_y_xp_cuando_el_puntaje_final_es_fraccionario() {
-        // Pesos y puntajes elegidos (todos fracciones binarias exactas:
-        // 0.625 = 5/8, 0.25 = 1/4, 0.125 = 1/8) para que puntaje_base dé un
-        // valor genuinamente fraccionario (no un entero ni un ".5" límite),
-        // ejercitando así el .round() real de dinero_ganado/xp_ganado que
-        // ningún otro test dispara (todos producen 100.0 o 200.0 exactos).
         let mut ticket = ticket_de_prueba(vec![Arquetipo::Select]);
         ticket.peso_correctitud = 0.625;
         ticket.peso_velocidad = 0.25;
@@ -306,18 +404,11 @@ mod tests {
             comentario_mentor: None,
         };
 
-        let resultado = calcular(&evaluacion, &ticket, 1.0);
+        let resultado = calcular(&evaluacion, &ticket, 1.0, 1.0);
 
-        // puntaje_base = 70*0.625 + 51*0.25 + 11*0.125
-        //              = 43.75   + 12.75   + 1.375
-        //              = 57.875
         assert_eq!(resultado.puntaje_base, 57.875);
         assert_eq!(resultado.puntaje_final, 57.875);
-
-        // dinero_ganado = round(57.875 * valor_base(100) / 100) = round(57.875) = 58
         assert_eq!(resultado.dinero_ganado, 58);
-
-        // xp Select (base 10) = round(10 * 57.875 / 100) = round(5.7875) = 6
         assert_eq!(resultado.xp_ganado, vec![(Arquetipo::Select, 6)]);
     }
 
@@ -347,5 +438,110 @@ mod tests {
             vec![(Arquetipo::Select, 10), (Arquetipo::Join, 20)],
             "la entrada existente de Select no debe alterarse y Join debe agregarse como nueva entrada"
         );
+    }
+
+    #[test]
+    fn puede_desbloquear_requiere_dinero_reputacion_y_xp_simultaneamente() {
+        let perk = perks::buscar("buena_fama").expect("buena_fama debe existir en el catálogo");
+
+        let mut estado = EstadoJugador::default();
+        assert!(!estado.puede_desbloquear(perk), "sin nada, no debe poder desbloquear");
+
+        estado.dinero = perk.costo_dinero;
+        assert!(!estado.puede_desbloquear(perk), "dinero solo no basta");
+
+        estado.reputacion = perk.reputacion_minima;
+        assert!(!estado.puede_desbloquear(perk), "falta el XP del arquetipo requerido");
+
+        estado.xp_por_arquetipo.push((perk.arquetipo_requerido, perk.xp_minimo));
+        assert!(estado.puede_desbloquear(perk), "con las 3 condiciones cumplidas ya debe poder");
+    }
+
+    #[test]
+    fn desbloquear_perk_gasta_dinero_y_es_idempotente() {
+        let catalogo = perks::catalogo();
+        let perk = perks::buscar("buena_fama").unwrap();
+
+        let mut estado = EstadoJugador::default();
+        estado.dinero = perk.costo_dinero;
+        estado.reputacion = perk.reputacion_minima;
+        estado.xp_por_arquetipo.push((perk.arquetipo_requerido, perk.xp_minimo));
+
+        estado.desbloquear_perk(catalogo, "buena_fama").expect("debe poder desbloquear");
+        assert_eq!(estado.dinero, 0);
+        assert!(estado.perks_desbloqueados.contains(&"buena_fama"));
+
+        estado.dinero = 1000;
+        estado.desbloquear_perk(catalogo, "buena_fama").expect("ya desbloqueado, no debe fallar");
+        assert_eq!(estado.dinero, 1000, "no debe cobrar de nuevo un perk ya desbloqueado");
+    }
+
+    #[test]
+    fn desbloquear_perk_falla_si_no_cumple_los_requisitos() {
+        let catalogo = perks::catalogo();
+        let mut estado = EstadoJugador::default();
+        assert!(estado.desbloquear_perk(catalogo, "buena_fama").is_err());
+    }
+
+    #[test]
+    fn equipar_perk_respeta_el_limite_de_2_slots() {
+        let mut estado = EstadoJugador::default();
+        estado.perks_desbloqueados = vec!["instinto", "rayos_x", "piloto_automatico"];
+
+        estado.equipar_perk("instinto").unwrap();
+        estado.equipar_perk("rayos_x").unwrap();
+        let resultado = estado.equipar_perk("piloto_automatico");
+
+        assert!(resultado.is_err(), "un tercer perk no debe caber en 2 slots");
+        assert_eq!(estado.perks_equipados, vec!["instinto", "rayos_x"]);
+    }
+
+    #[test]
+    fn equipar_perk_falla_si_no_esta_desbloqueado() {
+        let mut estado = EstadoJugador::default();
+        assert!(estado.equipar_perk("instinto").is_err());
+    }
+
+    #[test]
+    fn desequipar_perk_libera_un_slot() {
+        let mut estado = EstadoJugador::default();
+        estado.perks_desbloqueados = vec!["instinto", "rayos_x"];
+        estado.equipar_perk("instinto").unwrap();
+        estado.equipar_perk("rayos_x").unwrap();
+
+        estado.desequipar_perk("instinto");
+        assert_eq!(estado.perks_equipados, vec!["rayos_x"]);
+
+        estado.perks_desbloqueados.push("piloto_automatico");
+        estado.equipar_perk("piloto_automatico").unwrap();
+        assert_eq!(estado.perks_equipados, vec!["rayos_x", "piloto_automatico"]);
+    }
+
+    #[test]
+    fn multiplicador_dinero_solo_cuenta_perks_equipados_no_solo_desbloqueados() {
+        let catalogo = perks::catalogo();
+        let mut estado = EstadoJugador::default();
+        estado.perks_desbloqueados.push("bono_bajo_la_mesa");
+
+        assert_eq!(
+            estado.multiplicador_dinero(catalogo),
+            1.0,
+            "desbloqueado pero no equipado no debe aplicar"
+        );
+
+        estado.equipar_perk("bono_bajo_la_mesa").unwrap();
+        assert_eq!(estado.multiplicador_dinero(catalogo), 1.2, "equipado, +20%");
+    }
+
+    #[test]
+    fn multiplicador_reputacion_solo_cuenta_perks_equipados_no_solo_desbloqueados() {
+        let catalogo = perks::catalogo();
+        let mut estado = EstadoJugador::default();
+        estado.perks_desbloqueados.push("buena_fama");
+
+        assert_eq!(estado.multiplicador_reputacion(catalogo), 1.0);
+
+        estado.equipar_perk("buena_fama").unwrap();
+        assert_eq!(estado.multiplicador_reputacion(catalogo), 1.2);
     }
 }
