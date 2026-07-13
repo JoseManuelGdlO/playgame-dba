@@ -35,7 +35,14 @@ impl EstadoTurno {
     pub fn nuevo(catalogo: &[Ticket], indice_inicial: usize) -> (Self, usize) {
         let tamano = TAMANO_LOTE.min(catalogo.len());
         let mut pendientes = Vec::with_capacity(tamano);
-        let mut indice = indice_inicial;
+        // Plan 7: `catalogo` ya no es siempre el catálogo completo de la
+        // empresa — el gating por rango (`lib.rs`) puede pasar un slice
+        // filtrado de tamaño distinto entre turnos. Normalizar con módulo
+        // evita un panic por índice fuera de rango; un catálogo vacío no
+        // debe darse en la práctica (Becario siempre tiene tickets
+        // elegibles), pero se cubre explícitamente para no dejar un panic
+        // latente.
+        let mut indice = if catalogo.is_empty() { 0 } else { indice_inicial % catalogo.len() };
         for _ in 0..tamano {
             pendientes.push(catalogo[indice].clone());
             indice = (indice + 1) % catalogo.len();
@@ -211,5 +218,24 @@ mod tests {
                 Escalamiento { ticket_id: "t3", reputacion_perdida: 2.0 },
             ]
         );
+    }
+
+    #[test]
+    fn nuevo_normaliza_un_indice_inicial_fuera_de_rango_con_modulo() {
+        let catalogo = catalogo_de_prueba();
+        let (turno, _) = EstadoTurno::nuevo(&catalogo, 7);
+        assert_eq!(
+            turno.pendientes.iter().map(|t| t.id).collect::<Vec<_>>(),
+            vec!["t3", "t4", "t5"],
+            "7 % 5 == 2, debe empezar en t3"
+        );
+    }
+
+    #[test]
+    fn nuevo_no_entra_en_panico_con_catalogo_vacio() {
+        let catalogo: Vec<Ticket> = vec![];
+        let (turno, siguiente_indice) = EstadoTurno::nuevo(&catalogo, 0);
+        assert!(turno.pendientes.is_empty());
+        assert_eq!(siguiente_indice, 0);
     }
 }
