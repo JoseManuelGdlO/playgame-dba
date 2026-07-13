@@ -1,5 +1,6 @@
 mod db;
 mod economia;
+mod perks;
 mod tickets;
 mod validation;
 
