@@ -29,6 +29,16 @@ pub struct Ticket {
     #[serde(skip_serializing)]
     #[allow(dead_code)]
     pub peso_practicas: f64,
+    /// Valor base de dinero (Etapa 12) — sube con prioridad/complejidad del
+    /// ticket. Dato interno de la fórmula de economía, sin uso del lado del
+    /// cliente.
+    #[serde(skip_serializing)]
+    #[allow(dead_code)]
+    pub valor_base: i64,
+    /// Factor de reputación (Etapa 12) — mayor en tickets de mayor exigencia.
+    #[serde(skip_serializing)]
+    #[allow(dead_code)]
+    pub factor_reputacion: f64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
@@ -80,6 +90,8 @@ fn plantilla_reporte_simple(
         peso_correctitud: 0.6,
         peso_velocidad: 0.2,
         peso_practicas: 0.2,
+        valor_base: 100,
+        factor_reputacion: 0.5,
     }
 }
 
@@ -108,6 +120,8 @@ fn plantilla_reporte_agregado(
         peso_correctitud: 0.5,
         peso_velocidad: 0.2,
         peso_practicas: 0.3,
+        valor_base: 150,
+        factor_reputacion: 0.7,
     }
 }
 
@@ -136,6 +150,8 @@ fn plantilla_reporte_join(
         peso_correctitud: 0.5,
         peso_velocidad: 0.2,
         peso_practicas: 0.3,
+        valor_base: 150,
+        factor_reputacion: 0.7,
     }
 }
 
@@ -164,6 +180,8 @@ fn plantilla_reporte_join_agregado(
         peso_correctitud: 0.4,
         peso_velocidad: 0.3,
         peso_practicas: 0.3,
+        valor_base: 200,
+        factor_reputacion: 1.0,
     }
 }
 
@@ -196,6 +214,8 @@ fn plantilla_depuracion(
         peso_correctitud: 0.3,
         peso_velocidad: 0.5,
         peso_practicas: 0.2,
+        valor_base: 250,
+        factor_reputacion: 1.2,
     }
 }
 
@@ -223,6 +243,7 @@ mod tests {
         assert!(ticket.sql_inicial.is_none());
         assert!(ticket.requiere_orden);
         assert_eq!((ticket.peso_correctitud, ticket.peso_velocidad, ticket.peso_practicas), (0.6, 0.2, 0.2));
+        assert_eq!((ticket.valor_base, ticket.factor_reputacion), (100, 0.5));
     }
 
     #[test]
@@ -232,6 +253,7 @@ mod tests {
         assert_eq!(ticket.arquetipos, vec![Arquetipo::Agregacion]);
         assert_eq!(ticket.prioridad, Prioridad::Baja);
         assert_eq!((ticket.peso_correctitud, ticket.peso_velocidad, ticket.peso_practicas), (0.5, 0.2, 0.3));
+        assert_eq!((ticket.valor_base, ticket.factor_reputacion), (150, 0.7));
     }
 
     #[test]
@@ -240,6 +262,7 @@ mod tests {
         assert_eq!(ticket.tipo, TipoTicket::ReporteAnalisis);
         assert_eq!(ticket.arquetipos, vec![Arquetipo::Join]);
         assert_eq!((ticket.peso_correctitud, ticket.peso_velocidad, ticket.peso_practicas), (0.5, 0.2, 0.3));
+        assert_eq!((ticket.valor_base, ticket.factor_reputacion), (150, 0.7));
     }
 
     #[test]
@@ -248,6 +271,7 @@ mod tests {
         assert_eq!(ticket.tipo, TipoTicket::ReporteAnalisis);
         assert_eq!(ticket.arquetipos, vec![Arquetipo::Join, Arquetipo::Agregacion]);
         assert_eq!((ticket.peso_correctitud, ticket.peso_velocidad, ticket.peso_practicas), (0.4, 0.3, 0.3));
+        assert_eq!((ticket.valor_base, ticket.factor_reputacion), (200, 1.0));
     }
 
     #[test]
@@ -267,6 +291,7 @@ mod tests {
         assert_eq!(ticket.sql_dorada, "SELECT rapida");
         assert_eq!(ticket.arquetipos, vec![Arquetipo::Join]);
         assert_eq!((ticket.peso_correctitud, ticket.peso_velocidad, ticket.peso_practicas), (0.3, 0.5, 0.2));
+        assert_eq!((ticket.valor_base, ticket.factor_reputacion), (250, 1.2));
     }
 
     #[test]
