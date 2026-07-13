@@ -1,10 +1,21 @@
 const { invoke } = window.__TAURI__.core;
 
 let sqlInput, statusMsg, resultTable, dineroEl, reputacionEl, rangoEl;
-let perksSelect, perksEquipadosMsg;
+let listaPerks, perksEquipadosMsg;
 let presupuestoEl, listaTickets, ticketActivoInfo, bandejaTitulo;
 let scoringOverlay, scoringAscenso, agenciaOverlay;
 let pantallaMenu, appShell, pantallaHub, pantallaConsola, btnCargarPartida;
+let ticketRetrato, consolaTitulo;
+
+const RETRATOS = {
+  generico: `<svg viewBox="0 0 8 8"><rect width="8" height="8" fill="#4a4a3a"/><rect x="2" y="1" width="4" height="3" fill="#8a8266"/><rect x="1" y="4" width="6" height="3" fill="#6b6b52"/><rect x="3" y="2" width="1" height="1" fill="#2a2a1f"/><rect x="5" y="2" width="1" height="1" fill="#2a2a1f"/></svg>`,
+  "El Mentor": `<svg viewBox="0 0 8 8"><rect width="8" height="8" fill="#3a3a2e"/><rect x="2" y="1" width="4" height="3" fill="#9a8a7a"/><rect x="1" y="4" width="6" height="3" fill="#7a6a5a"/><rect x="2" y="2" width="4" height="1" fill="#1c1c15"/></svg>`,
+  "Auditor de Cumplimiento": `<svg viewBox="0 0 8 8"><rect width="8" height="8" fill="#2a2a35"/><rect x="2" y="1" width="4" height="3" fill="#7a7a8a"/><rect x="1" y="4" width="6" height="3" fill="#5a5a6a"/><rect x="3" y="4" width="2" height="3" fill="#1c1c22"/></svg>`,
+};
+
+function retratoParaSolicitante(solicitante) {
+  return RETRATOS[solicitante] || RETRATOS.generico;
+}
 
 function mostrarPantalla(nombre) {
   pantallaMenu.classList.toggle("oculto", nombre !== "menu");
@@ -91,6 +102,8 @@ function seleccionarTicket(ticket) {
   ticketActivoId = ticket.id;
   ticketActivoInfo.textContent = `Motivo: ${ticket.motivo}\nSolicitud: ${ticket.solicitud}`;
   sqlInput.value = ticket.sql_inicial || "SELECT * FROM pacientes;";
+  ticketRetrato.innerHTML = retratoParaSolicitante(ticket.solicitante);
+  consolaTitulo.textContent = `query-path — ${ticket.id}`;
   mostrarPantalla("consola");
 }
 
@@ -100,6 +113,7 @@ function renderBandeja(estadoTurno) {
   listaTickets.innerHTML = "";
   for (const ticket of estadoTurno.pendientes) {
     const li = document.createElement("li");
+    li.className = "papel";
     const info = document.createElement("span");
     info.textContent = `[⏱️ ${ticket.costo_tiempo}] ${ticket.motivo}`;
     const boton = document.createElement("button");
@@ -225,16 +239,23 @@ async function submitTicket() {
 }
 
 function renderPerks(perks) {
-  const seleccionado = perksSelect.value;
-  perksSelect.innerHTML = "";
+  listaPerks.innerHTML = "";
   for (const perk of perks) {
-    const opt = document.createElement("option");
-    opt.value = perk.id;
+    const li = document.createElement("li");
+    li.className = `papel papel-perk ${perk.equipado ? "equipado" : perk.desbloqueado ? "desbloqueado" : ""}`.trim();
+
+    const info = document.createElement("span");
     const estado = perk.equipado ? "⭐ equipado" : perk.desbloqueado ? "✅ desbloqueado" : "🔒 bloqueado";
-    opt.textContent = `${perk.nombre} (${perk.categoria}) — ${estado} — $${perk.costo_dinero}, ⭐${perk.reputacion_minima}`;
-    perksSelect.appendChild(opt);
+    info.textContent = `${perk.nombre} (${perk.categoria}) — ${estado} — $${perk.costo_dinero}, ⭐${perk.reputacion_minima}`;
+
+    const boton = document.createElement("button");
+    boton.textContent = perk.equipado ? "Desequipar" : perk.desbloqueado ? "Equipar" : "Desbloquear";
+    boton.addEventListener("click", () => accionPerk(perk));
+
+    li.appendChild(info);
+    li.appendChild(boton);
+    listaPerks.appendChild(li);
   }
-  if (seleccionado) perksSelect.value = seleccionado;
 
   const equipados = perks.filter((p) => p.equipado).map((p) => p.nombre);
   perksEquipadosMsg.textContent = equipados.length ? `Equipados: ${equipados.join(", ")}` : "Ningún perk equipado.";
@@ -245,26 +266,17 @@ async function cargarPerks() {
   renderPerks(perks);
 }
 
-async function desbloquearPerkSeleccionado() {
-  const id = perksSelect.value;
-  if (!id) return;
+async function accionPerk(perk) {
   try {
-    const perks = await invoke("desbloquear_perk", { id });
-    renderPerks(perks);
-    setStatus("Perk desbloqueado.", "ok");
-  } catch (err) {
-    setStatus(String(err), "error");
-  }
-}
-
-async function equiparODesequiparPerkSeleccionado() {
-  const id = perksSelect.value;
-  if (!id) return;
-  const actual = (await invoke("catalogo_perks")).find((p) => p.id === id);
-  try {
-    const perks = actual && actual.equipado
-      ? await invoke("desequipar_perk", { id })
-      : await invoke("equipar_perk", { id });
+    let perks;
+    if (perk.equipado) {
+      perks = await invoke("desequipar_perk", { id: perk.id });
+    } else if (perk.desbloqueado) {
+      perks = await invoke("equipar_perk", { id: perk.id });
+    } else {
+      perks = await invoke("desbloquear_perk", { id: perk.id });
+      setStatus("Perk desbloqueado.", "ok");
+    }
     renderPerks(perks);
   } catch (err) {
     setStatus(String(err), "error");
@@ -278,7 +290,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   dineroEl = document.querySelector("#dinero");
   reputacionEl = document.querySelector("#reputacion");
   rangoEl = document.querySelector("#rango");
-  perksSelect = document.querySelector("#perks-select");
+  listaPerks = document.querySelector("#lista-perks");
   perksEquipadosMsg = document.querySelector("#perks-equipados-msg");
   presupuestoEl = document.querySelector("#presupuesto");
   listaTickets = document.querySelector("#lista-tickets");
@@ -292,6 +304,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   pantallaHub = document.querySelector("#pantalla-hub");
   pantallaConsola = document.querySelector("#pantalla-consola");
   btnCargarPartida = document.querySelector("#btn-cargar-partida");
+  ticketRetrato = document.querySelector("#ticket-retrato");
+  consolaTitulo = document.querySelector("#consola-titulo");
 
   await mostrarMenu();
 
@@ -302,8 +316,6 @@ window.addEventListener("DOMContentLoaded", async () => {
     scoringOverlay.classList.add("oculto");
     mostrarPantalla("hub");
   });
-  document.querySelector("#btn-unlock-perk").addEventListener("click", desbloquearPerkSeleccionado);
-  document.querySelector("#btn-equip-perk").addEventListener("click", equiparODesequiparPerkSeleccionado);
   document.querySelector("#btn-confirmar-agencia").addEventListener("click", confirmarTransicionAgencia);
   document.querySelector("#btn-iniciar-partida").addEventListener("click", iniciarPartida);
   document.querySelector("#btn-cargar-partida").addEventListener("click", cargarPartida);

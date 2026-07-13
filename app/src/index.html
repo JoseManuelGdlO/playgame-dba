@@ -21,7 +21,7 @@
       </div>
     </div>
 
-    <div id="app-shell" class="oculto">
+    <div id="app-shell" class="oculto escritorio">
       <header>
         <h1>Query Path <span class="subtitle">— spike técnico (Tauri + Postgres embebido)</span></h1>
         <div class="stats">
@@ -41,11 +41,7 @@
 
         <section class="perks">
           <h2>Perks</h2>
-          <select id="perks-select"></select>
-          <div class="actions">
-            <button id="btn-unlock-perk">Desbloquear</button>
-            <button id="btn-equip-perk">Equipar/Desequipar</button>
-          </div>
+          <ul id="lista-perks"></ul>
           <p id="perks-equipados-msg"></p>
         </section>
       </main>
@@ -53,19 +49,32 @@
       <main class="container oculto" id="pantalla-consola">
         <button id="btn-volver-hub">‹ Volver</button>
 
-        <section class="console">
-          <p id="ticket-activo-info">Elige un ticket de la bandeja para empezar.</p>
-          <textarea id="sql-input" spellcheck="false" placeholder="SELECT * FROM pacientes;"></textarea>
-          <div class="actions">
-            <button id="btn-play">▶ Play</button>
-            <button id="btn-submit">✓ Enviar ticket</button>
+        <div class="ventana-terminal">
+          <div class="ventana-terminal-barra">
+            <span class="ventana-terminal-punto rojo"></span>
+            <span class="ventana-terminal-punto amarillo"></span>
+            <span class="ventana-terminal-punto verde"></span>
+            <span class="ventana-terminal-titulo" id="consola-titulo">query-path</span>
           </div>
-        </section>
+          <div class="ventana-terminal-cuerpo">
+            <section class="console">
+              <div class="ticket-info-con-retrato">
+                <div class="retrato" id="ticket-retrato"></div>
+                <p id="ticket-activo-info">Elige un ticket de la bandeja para empezar.</p>
+              </div>
+              <textarea id="sql-input" spellcheck="false" placeholder="SELECT * FROM pacientes;"></textarea>
+              <div class="actions">
+                <button id="btn-play">▶ Play</button>
+                <button id="btn-submit">✓ Enviar ticket</button>
+              </div>
+            </section>
 
-        <section class="output">
-          <h2>Resultado</h2>
-          <div id="result-table"></div>
-        </section>
+            <section class="output">
+              <h2>Resultado</h2>
+              <div id="result-table"></div>
+            </section>
+          </div>
+        </div>
       </main>
     </div>
 
