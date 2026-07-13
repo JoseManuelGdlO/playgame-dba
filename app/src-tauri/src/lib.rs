@@ -39,11 +39,20 @@ impl TurnoManejado {
     /// Escala los tickets pendientes del turno actual (penaliza reputación)
     /// y arranca el turno siguiente — usado tanto cuando el presupuesto se
     /// agota como cuando el jugador cierra el día manualmente (Etapa 11-A).
+    /// El lote nuevo se filtra por el rango actual del jugador (Etapa 10,
+    /// Plan 7): un ascenso a mitad de turno no reordena la bandeja ya
+    /// mostrada, pero el turno siguiente ya refleja el catálogo desbloqueado.
     fn escalar_y_avanzar(&mut self, jugador: &mut economia::EstadoJugador) {
         for escalamiento in self.actual.escalar_pendientes() {
             jugador.aplicar_penalizacion(escalamiento.reputacion_perdida);
         }
-        let (nuevo_turno, siguiente_indice) = turno::EstadoTurno::nuevo(&self.catalogo, self.indice_siguiente);
+        let elegibles: Vec<tickets::Ticket> = self
+            .catalogo
+            .iter()
+            .filter(|t| tickets::rango_requerido(t) <= jugador.rango)
+            .cloned()
+            .collect();
+        let (nuevo_turno, siguiente_indice) = turno::EstadoTurno::nuevo(&elegibles, self.indice_siguiente);
         self.actual = nuevo_turno;
         self.indice_siguiente = siguiente_indice;
     }
@@ -66,6 +75,10 @@ struct ScoreResult {
     reputacion_total: f64,
     xp_ganado: Vec<(tickets::Arquetipo, i64)>,
     puede_ascender: bool,
+    /// Etapa 10, Plan 7: `true` solo en la entrega exacta en la que el
+    /// ascenso de rango ocurrió, para que el frontend muestre el anuncio.
+    ascendio: bool,
+    rango_actual: tickets::Rango,
     mensaje: String,
 }
 
@@ -102,6 +115,13 @@ fn vista_perks(estado: &economia::EstadoJugador) -> Vec<PerkConEstado> {
 #[tauri::command]
 fn turno_actual(turno: tauri::State<'_, Turno>) -> turno::EstadoTurno {
     turno.0.lock().unwrap().actual.clone()
+}
+
+/// Etapa 10, Plan 7: expone el rango vigente para que el frontend pinte el
+/// badge apenas carga, sin depender de haber resuelto un ticket primero.
+#[tauri::command]
+fn rango_actual(jugador: tauri::State<'_, Jugador>) -> tickets::Rango {
+    jugador.0.lock().unwrap().rango
 }
 
 #[tauri::command]
@@ -141,7 +161,7 @@ async fn resolver_ticket(
     let multiplicador_dinero = estado.multiplicador_dinero(perks::catalogo());
     let multiplicador_reputacion = estado.multiplicador_reputacion(perks::catalogo());
     let resultado = economia::calcular(&evaluacion, &ticket, multiplicador_dinero, multiplicador_reputacion);
-    estado.aplicar_resultado(&resultado);
+    let ascendio = estado.aplicar_resultado(&resultado);
 
     let mut manejado = turno_state.0.lock().unwrap();
     if manejado.actual.pendientes.is_empty() || manejado.actual.turno_agotado() {
@@ -162,6 +182,8 @@ async fn resolver_ticket(
         reputacion_total: estado.reputacion,
         xp_ganado: resultado.xp_ganado,
         puede_ascender: estado.puede_ascender(),
+        ascendio,
+        rango_actual: estado.rango,
         mensaje: if evaluacion.correcta {
             "Ticket resuelto. Contabilidad procesará tu pago... eventualmente.".to_string()
         } else {
@@ -211,6 +233,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             turno_actual,
+            rango_actual,
             run_query,
             resolver_ticket,
             cerrar_dia,
@@ -233,9 +256,18 @@ pub fn run() {
                 // `pool`) contra `sql_dorada` de un ticket de `Turno`, así que si
                 // alguna vez divergen, se validaría contra el esquema de otra empresa.
                 let catalogo = tickets::catalogo(db::Company::HospitalArcangel);
-                let (turno_inicial, indice_siguiente) = turno::EstadoTurno::nuevo(&catalogo, 0);
+                let jugador_inicial = economia::EstadoJugador::default();
+                // Etapa 10, Plan 7: el turno inicial ya se filtra por rango —
+                // un Becario recién llegado no debe ver tickets de
+                // Join/Agregación en su primera bandeja.
+                let elegibles: Vec<tickets::Ticket> = catalogo
+                    .iter()
+                    .filter(|t| tickets::rango_requerido(t) <= jugador_inicial.rango)
+                    .cloned()
+                    .collect();
+                let (turno_inicial, indice_siguiente) = turno::EstadoTurno::nuevo(&elegibles, 0);
                 handle.manage(AppState { pool });
-                handle.manage(Jugador(Mutex::new(economia::EstadoJugador::default())));
+                handle.manage(Jugador(Mutex::new(jugador_inicial)));
                 handle.manage(Turno(Mutex::new(TurnoManejado {
                     catalogo,
                     indice_siguiente,
