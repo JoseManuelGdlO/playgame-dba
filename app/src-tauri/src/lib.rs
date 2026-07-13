@@ -11,15 +11,10 @@ struct AppState {
     pool: sqlx::PgPool,
 }
 
-/// Estado stub de economía/loadout (Etapa 12/13) — solo para probar la forma
-/// del loop en el walking skeleton, sin persistencia entre sesiones.
-#[derive(Default)]
-struct PerkState {
-    unlocked: bool,
-    dinero: i64,
-}
-
-struct Perk(Mutex<PerkState>);
+/// Estado de economía del jugador (Etapa 12), gestionado por Tauri. El bool
+/// de perk es el mismo stub heredado del spike — el sistema RPG real
+/// (Etapa 13) lo reemplaza en un plan posterior.
+struct Jugador(Mutex<economia::EstadoJugador>);
 
 /// Mantiene vivo el servidor Postgres embebido y permite detenerlo al salir.
 struct EmbeddedPostgres(Mutex<Option<postgresql_embedded::PostgreSQL>>);
@@ -38,9 +33,15 @@ struct ScoreResult {
     puntaje_correctitud: f64,
     puntaje_velocidad: f64,
     puntaje_practicas: f64,
+    puntaje_base: f64,
+    puntaje_final: f64,
     comentario_mentor: Option<String>,
     dinero_ganado: i64,
     dinero_total: i64,
+    reputacion_ganada: f64,
+    reputacion_total: f64,
+    xp_ganado: Vec<(tickets::Arquetipo, i64)>,
+    puede_ascender: bool,
     mensaje: String,
 }
 
@@ -64,21 +65,21 @@ async fn run_query(state: tauri::State<'_, AppState>, sql: String) -> Result<db:
 #[tauri::command]
 async fn submit_ticket(
     state: tauri::State<'_, AppState>,
-    perk: tauri::State<'_, Perk>,
+    jugador: tauri::State<'_, Jugador>,
     tickets: tauri::State<'_, Tickets>,
     sql: String,
 ) -> Result<ScoreResult, String> {
     let indice = *tickets.indice_actual.lock().unwrap();
-    let sql_dorada = tickets.catalogo[indice].sql_dorada.clone();
-    let requiere_orden = tickets.catalogo[indice].requiere_orden;
+    let ticket = tickets.catalogo[indice].clone();
 
-    let evaluacion = validation::evaluar_entrega(&state.pool, &sql, &sql_dorada, requiere_orden)
+    let evaluacion = validation::evaluar_entrega(&state.pool, &sql, &ticket.sql_dorada, ticket.requiere_orden)
         .await
         .map_err(|e| e.to_string())?;
 
-    let mut perk_state = perk.0.lock().unwrap();
-    let dinero_ganado = if evaluacion.correcta { 500 } else { 0 };
-    perk_state.dinero += dinero_ganado;
+    let resultado = economia::calcular(&evaluacion, &ticket, 1.0);
+
+    let mut estado = jugador.0.lock().unwrap();
+    estado.aplicar_resultado(&resultado);
 
     if evaluacion.correcta {
         let mut indice_mut = tickets.indice_actual.lock().unwrap();
@@ -90,9 +91,19 @@ async fn submit_ticket(
         puntaje_correctitud: evaluacion.puntaje_correctitud,
         puntaje_velocidad: evaluacion.puntaje_velocidad,
         puntaje_practicas: evaluacion.puntaje_practicas,
+        puntaje_base: resultado.puntaje_base,
+        puntaje_final: resultado.puntaje_final,
         comentario_mentor: evaluacion.comentario_mentor.map(str::to_string),
-        dinero_ganado,
-        dinero_total: perk_state.dinero,
+        dinero_ganado: resultado.dinero_ganado,
+        dinero_total: estado.dinero,
+        reputacion_ganada: resultado.reputacion_ganada,
+        reputacion_total: estado.reputacion,
+        xp_ganado: resultado.xp_ganado,
+        // Etapa 10, deliberadamente recortado: solo se expone la señal de que
+        // la reputación ya cruzó el umbral de ascenso — no dispara ningún
+        // evento de ascenso (mini-boss, cambio de rango), que queda para un
+        // plan posterior.
+        puede_ascender: estado.puede_ascender(),
         mensaje: if evaluacion.correcta {
             "Ticket resuelto. Contabilidad procesará tu pago... eventualmente.".to_string()
         } else {
@@ -102,21 +113,21 @@ async fn submit_ticket(
 }
 
 #[tauri::command]
-fn unlock_perk(perk: tauri::State<'_, Perk>) -> Result<PerkStatus, String> {
+fn unlock_perk(jugador: tauri::State<'_, Jugador>) -> Result<PerkStatus, String> {
     const COSTO: i64 = 300;
-    let mut perk_state = perk.0.lock().unwrap();
-    if perk_state.unlocked {
-        return Ok(PerkStatus { unlocked: true, dinero_total: perk_state.dinero });
+    let mut estado = jugador.0.lock().unwrap();
+    if estado.perk_desbloqueado {
+        return Ok(PerkStatus { unlocked: true, dinero_total: estado.dinero });
     }
-    if perk_state.dinero < COSTO {
+    if estado.dinero < COSTO {
         return Err(format!(
             "No tienes suficiente dinero para este perk (cuesta {COSTO}, tienes {}).",
-            perk_state.dinero
+            estado.dinero
         ));
     }
-    perk_state.dinero -= COSTO;
-    perk_state.unlocked = true;
-    Ok(PerkStatus { unlocked: true, dinero_total: perk_state.dinero })
+    estado.dinero -= COSTO;
+    estado.perk_desbloqueado = true;
+    Ok(PerkStatus { unlocked: true, dinero_total: estado.dinero })
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -144,7 +155,7 @@ pub fn run() {
                 // alguna vez divergen, se validaría contra el esquema de otra empresa.
                 let catalogo = tickets::catalogo(db::Company::HospitalArcangel);
                 handle.manage(AppState { pool });
-                handle.manage(Perk(Mutex::new(PerkState::default())));
+                handle.manage(Jugador(Mutex::new(economia::EstadoJugador::default())));
                 handle.manage(Tickets { catalogo, indice_actual: Mutex::new(0) });
                 handle.manage(EmbeddedPostgres(Mutex::new(Some(pg))));
             });
