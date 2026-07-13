@@ -115,6 +115,10 @@ button:disabled {
   background: radial-gradient(ellipse at center, #1e1e2e, #11111b);
 }
 
+#pantalla-menu.oculto {
+  display: none;
+}
+
 #pantalla-menu h1 {
   font-family: "SF Mono", Menlo, Consolas, monospace;
   font-size: 2rem;
