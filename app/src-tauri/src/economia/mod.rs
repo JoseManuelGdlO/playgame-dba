@@ -544,4 +544,60 @@ mod tests {
         estado.equipar_perk("buena_fama").unwrap();
         assert_eq!(estado.multiplicador_reputacion(catalogo), 1.2);
     }
+
+    #[test]
+    fn desbloquear_perk_falla_con_id_desconocido() {
+        let mut estado = EstadoJugador::default();
+
+        let resultado = estado.desbloquear_perk(perks::catalogo(), "perk_que_no_existe");
+
+        assert!(resultado.is_err());
+        assert!(resultado.unwrap_err().contains("perk_que_no_existe"));
+    }
+
+    #[test]
+    fn equipar_perk_dos_veces_es_idempotente() {
+        let mut estado = EstadoJugador::default();
+        estado.perks_desbloqueados = vec!["instinto"];
+        estado.equipar_perk("instinto").unwrap();
+
+        let resultado = estado.equipar_perk("instinto");
+
+        assert!(resultado.is_ok());
+        assert_eq!(
+            estado.perks_equipados,
+            vec!["instinto"],
+            "re-equipar un perk ya equipado no debe duplicar la entrada"
+        );
+    }
+
+    #[test]
+    fn desequipar_perk_sin_estar_equipado_no_hace_nada() {
+        let mut estado = EstadoJugador::default();
+
+        estado.desequipar_perk("instinto");
+
+        assert!(estado.perks_equipados.is_empty());
+    }
+
+    #[test]
+    fn multiplicadores_de_dinero_y_reputacion_se_calculan_independientemente_con_ambos_perks_equipados(
+    ) {
+        let catalogo = perks::catalogo();
+        let mut estado = EstadoJugador::default();
+        estado.perks_desbloqueados = vec!["buena_fama", "bono_bajo_la_mesa"];
+        estado.equipar_perk("buena_fama").unwrap();
+        estado.equipar_perk("bono_bajo_la_mesa").unwrap();
+
+        assert_eq!(
+            estado.multiplicador_dinero(catalogo),
+            1.2,
+            "solo bono_bajo_la_mesa afecta dinero"
+        );
+        assert_eq!(
+            estado.multiplicador_reputacion(catalogo),
+            1.2,
+            "solo buena_fama afecta reputación"
+        );
+    }
 }
