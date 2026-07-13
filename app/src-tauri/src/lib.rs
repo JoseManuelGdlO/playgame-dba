@@ -1,5 +1,6 @@
 mod db;
 mod economia;
+mod guardado;
 mod perks;
 mod tickets;
 // `buscar_pendiente` (usado antes por `resolver_ticket`) quedó sin llamadores
