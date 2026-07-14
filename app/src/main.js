@@ -20,11 +20,28 @@ function retratoParaSolicitante(solicitante) {
   return RETRATOS[solicitante] || RETRATOS.generico;
 }
 
+const DURACION_TRANSICION_MS = 250;
+
+function alternarPantalla(el, mostrar) {
+  if (mostrar) {
+    el.classList.remove("oculto");
+    void el.offsetHeight;
+    el.classList.remove("fade-out");
+  } else {
+    el.classList.add("fade-out");
+    setTimeout(() => {
+      if (el.classList.contains("fade-out")) {
+        el.classList.add("oculto");
+      }
+    }, DURACION_TRANSICION_MS);
+  }
+}
+
 function mostrarPantalla(nombre) {
-  pantallaMenu.classList.toggle("oculto", nombre !== "menu");
-  appShell.classList.toggle("oculto", nombre === "menu");
-  pantallaHub.classList.toggle("oculto", nombre !== "hub");
-  pantallaConsola.classList.toggle("oculto", nombre !== "consola");
+  alternarPantalla(pantallaMenu, nombre === "menu");
+  alternarPantalla(appShell, nombre !== "menu");
+  alternarPantalla(pantallaHub, nombre === "hub");
+  alternarPantalla(pantallaConsola, nombre === "consola");
 }
 
 const TITULO_FASE = {

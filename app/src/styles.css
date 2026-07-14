@@ -119,6 +119,29 @@ button:disabled {
   display: none;
 }
 
+#pantalla-menu,
+#app-shell,
+#pantalla-hub,
+#pantalla-consola {
+  transition: opacity 250ms ease;
+}
+
+#pantalla-menu.fade-out,
+#app-shell.fade-out {
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+}
+
+#pantalla-hub.fade-out,
+#pantalla-consola.fade-out {
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+}
+
 #pantalla-menu h1 {
   font-family: "SF Mono", Menlo, Consolas, monospace;
   font-size: 2rem;
@@ -200,6 +223,7 @@ tr:nth-child(even) td {
 .escritorio {
   background: linear-gradient(160deg, #2a2a1f, #1c1c15);
   min-height: 100vh;
+  position: relative;
 }
 
 .ventana-terminal {
