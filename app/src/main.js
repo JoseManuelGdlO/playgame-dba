@@ -285,7 +285,7 @@ async function runAllQueries() {
 function seleccionarTicket(ticket) {
   ticketActivoId = ticket.id;
   ticketActivoInfo.textContent = `Motivo: ${ticket.motivo}\nSolicitud: ${ticket.solicitud}`;
-  sqlInput.value = ticket.sql_inicial || "SELECT * FROM pacientes;";
+  sqlInput.value = tutorialActivo() ? "" : (ticket.sql_inicial || "SELECT * FROM pacientes;");
   ticketRetrato.innerHTML = retratoParaSolicitante(ticket.solicitante);
   consolaTitulo.textContent = `query-path — ${ticket.id}`;
   mostrarPantalla("consola");
