@@ -1,11 +1,35 @@
 use super::{
     plantilla_depuracion, plantilla_reporte_agregado, plantilla_reporte_join,
-    plantilla_reporte_join_agregado, plantilla_reporte_simple, Arquetipo, Prioridad, Ticket,
-    TipoTicket,
+    plantilla_reporte_join_agregado, plantilla_reporte_simple, plantilla_reporte_simple_sin_orden,
+    Arquetipo, Prioridad, Ticket, TipoTicket,
 };
 
 pub(crate) fn catalogo() -> Vec<Ticket> {
     vec![
+        plantilla_reporte_simple_sin_orden(
+            "hospital_reporte_departamentos",
+            "Recursos Humanos",
+            "RH necesita confirmar el directorio de áreas antes de actualizar el organigrama.",
+            "Lista el nombre y el piso de cada departamento.",
+            "SELECT nombre, piso FROM departamentos",
+            10,
+        ),
+        plantilla_reporte_simple_sin_orden(
+            "hospital_reporte_empleados_directorio",
+            "Recursos Humanos",
+            "RH quiere el directorio de personal a la mano antes de la reunión de la tarde.",
+            "Lista el nombre y el puesto de cada empleado.",
+            "SELECT nombre, puesto FROM empleados",
+            10,
+        ),
+        plantilla_reporte_simple_sin_orden(
+            "hospital_reporte_habitaciones_inventario",
+            "Administración de Instalaciones",
+            "Mantenimiento necesita el inventario de habitaciones para su checklist mensual.",
+            "Lista el número y el tipo de cada habitación.",
+            "SELECT numero, tipo FROM habitaciones",
+            10,
+        ),
         plantilla_reporte_simple(
             "hospital_reporte_pacientes_cardiologia",
             "Contabilidad",
@@ -133,12 +157,15 @@ mod tests {
     use crate::validation;
 
     #[test]
-    fn catalogo_tiene_6_reportes_y_2_depuraciones() {
+    fn catalogo_tiene_9_reportes_y_2_depuraciones() {
         let tickets = catalogo();
-        assert_eq!(tickets.len(), 8);
+        assert_eq!(tickets.len(), 11);
         let reportes = tickets.iter().filter(|t| t.tipo == TipoTicket::ReporteAnalisis).count();
         let depuraciones = tickets.iter().filter(|t| t.tipo == TipoTicket::InvestigacionDepuracion).count();
-        assert_eq!(reportes, 6, "4 originales + 2 Select-only agregados para Becario (Plan 7)");
+        assert_eq!(
+            reportes, 9,
+            "4 originales + 2 Select-only (Plan 7) + 3 Select-sin-orden (Plan 16)"
+        );
         assert_eq!(depuraciones, 2);
     }
 

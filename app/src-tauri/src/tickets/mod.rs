@@ -116,6 +116,25 @@ fn plantilla_reporte_simple(
     }
 }
 
+/// Plantilla "reporte simple sin orden": igual que `plantilla_reporte_simple`
+/// pero para solicitudes que no piden ningún orden particular — sin `ORDER
+/// BY`, Postgres no garantiza el orden de las filas, así que la comparación
+/// de correctitud debe ser por conjunto (`requiere_orden: false`), no por
+/// secuencia exacta (Plan 16).
+fn plantilla_reporte_simple_sin_orden(
+    id: &'static str,
+    solicitante: &'static str,
+    motivo: impl Into<String>,
+    solicitud: impl Into<String>,
+    sql_dorada: impl Into<String>,
+    costo_tiempo: u32,
+) -> Ticket {
+    Ticket {
+        requiere_orden: false,
+        ..plantilla_reporte_simple(id, solicitante, motivo, solicitud, sql_dorada, costo_tiempo)
+    }
+}
+
 /// Plantilla "reporte agregado": agrupa una tabla por una columna y calcula
 /// una métrica (Auxiliar: GROUP BY + COUNT/SUM, Etapa 10).
 fn plantilla_reporte_agregado(
@@ -274,6 +293,21 @@ mod tests {
     }
 
     #[test]
+    fn plantilla_reporte_simple_sin_orden_arma_un_ticket_sin_requerir_orden() {
+        let ticket =
+            plantilla_reporte_simple_sin_orden("id6", "Alguien", "un motivo", "una solicitud", "SELECT 1", 10);
+        assert_eq!(ticket.tipo, TipoTicket::ReporteAnalisis);
+        assert_eq!(ticket.arquetipos, vec![Arquetipo::Select]);
+        assert!(ticket.sql_inicial.is_none());
+        assert!(
+            !ticket.requiere_orden,
+            "sin ORDER BY, la comparación debe ser por conjunto, no por orden exacto"
+        );
+        assert_eq!((ticket.peso_correctitud, ticket.peso_velocidad, ticket.peso_practicas), (0.6, 0.2, 0.2));
+        assert_eq!((ticket.valor_base, ticket.factor_reputacion), (100, 0.5));
+    }
+
+    #[test]
     fn plantilla_reporte_agregado_arma_un_ticket_de_agregacion() {
         let ticket = plantilla_reporte_agregado("id2", "Alguien", "un motivo", "una solicitud", "SELECT 1", 15);
         assert_eq!(ticket.tipo, TipoTicket::ReporteAnalisis);
@@ -325,8 +359,8 @@ mod tests {
     fn catalogo_devuelve_el_tamano_esperado_por_empresa() {
         assert_eq!(
             catalogo(crate::db::Company::HospitalArcangel).len(),
-            8,
-            "Plan 7 agrega 2 tickets Select-only para que Becario tenga bandeja"
+            11,
+            "Plan 7 agrega 2 Select-only, Plan 16 agrega 3 Select-sin-orden"
         );
         assert_eq!(catalogo(crate::db::Company::Postafeta).len(), 6);
     }
@@ -356,12 +390,12 @@ mod tests {
     }
 
     #[test]
-    fn catalogo_de_hospital_arcangel_tiene_3_tickets_elegibles_para_becario() {
+    fn catalogo_de_hospital_arcangel_tiene_6_tickets_elegibles_para_becario() {
         let elegibles = catalogo(crate::db::Company::HospitalArcangel)
             .into_iter()
             .filter(|t| rango_requerido(t) <= Rango::Becario)
             .count();
-        assert_eq!(elegibles, 3, "el ticket original de Select + los 2 agregados en la Tarea 1");
+        assert_eq!(elegibles, 6, "3 Select-only (Plan 7) + 3 Select-sin-orden (Plan 16)");
     }
 
     #[test]
@@ -369,11 +403,11 @@ mod tests {
         let catalogo_completo = catalogo(crate::db::Company::HospitalArcangel);
 
         let elegibles_becario = tickets_elegibles(&catalogo_completo, Rango::Becario);
-        assert_eq!(elegibles_becario.len(), 3, "solo los 3 tickets Select-only son elegibles para Becario");
+        assert_eq!(elegibles_becario.len(), 6, "6 Select-only tickets: 3 (Plan 7) + 3 (Plan 16)");
         assert!(elegibles_becario.iter().all(|t| rango_requerido(t) <= Rango::Becario));
 
         let elegibles_auxiliar = tickets_elegibles(&catalogo_completo, Rango::AuxiliarDeSistemas);
-        assert_eq!(elegibles_auxiliar.len(), 8, "Auxiliar de Sistemas desbloquea el catálogo completo");
+        assert_eq!(elegibles_auxiliar.len(), 11, "Auxiliar de Sistemas desbloquea el catálogo completo");
     }
 
     #[test]
