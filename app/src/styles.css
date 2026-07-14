@@ -869,8 +869,8 @@ button,
 .caja-tabla {
   position: absolute;
   width: 220px;
-  background: #e8dcc0;
-  color: #3a3a2e;
+  background: #313244;
+  color: #cdd6f4;
   border-radius: 4px;
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
   padding: 0.6rem 0.7rem;
@@ -891,7 +891,7 @@ button,
 
 .caja-tabla-descripcion {
   font-size: 0.65rem;
-  color: #5a4a35;
+  color: #9399b2;
   margin-bottom: 0.5rem;
   line-height: 1.4;
 }
@@ -905,7 +905,7 @@ button,
 .caja-tabla-columnas li {
   font-size: 0.68rem;
   padding: 0.2rem 0;
-  border-top: 1px solid rgba(58, 58, 46, 0.15);
+  border-top: 1px solid rgba(205, 214, 244, 0.1);
 }
 
 .caja-tabla-columnas li:first-child {
@@ -918,13 +918,13 @@ button,
 }
 
 .columna-tipo {
-  color: #7a6a55;
+  color: #6c7086;
   font-size: 0.62rem;
 }
 
 .columna-descripcion {
   font-size: 0.6rem;
-  color: #8a7355;
+  color: #7c8098;
   line-height: 1.3;
   margin-top: 0.1rem;
 }
