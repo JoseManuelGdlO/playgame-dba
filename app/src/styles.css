@@ -175,6 +175,33 @@ button:disabled {
   border-color: #89b4fa;
 }
 
+#btn-ejecutar-todas {
+  color: #fab387;
+  border-color: #fab387;
+}
+
+.resultado-bloque {
+  margin-bottom: 1rem;
+}
+
+.resultado-bloque:last-child {
+  margin-bottom: 0;
+}
+
+.resultado-etiqueta {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #fab387;
+  margin: 0 0 0.35rem;
+}
+
+.resultado-error {
+  color: #f38ba8;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
 #status-msg {
   min-height: 1.2em;
   margin: 0;

@@ -136,11 +136,11 @@ function actualizarReputacion(valorFormateado) {
 let ticketActivoId = null;
 let empresaActual = null;
 
-function renderRows(rows) {
-  resultTable.innerHTML = "";
+function crearTablaFilas(rows) {
   if (!rows || rows.length === 0) {
-    resultTable.textContent = "(sin filas)";
-    return;
+    const vacio = document.createElement("p");
+    vacio.textContent = "(sin filas)";
+    return vacio;
   }
   const columns = Object.keys(rows[0]);
   const table = document.createElement("table");
@@ -166,7 +166,31 @@ function renderRows(rows) {
     tbody.appendChild(tr);
   }
   table.appendChild(tbody);
-  resultTable.appendChild(table);
+  return table;
+}
+
+function renderResultados(resultados) {
+  resultTable.innerHTML = "";
+  const mostrarEtiquetas = resultados.length > 1;
+  resultados.forEach((resultado, indice) => {
+    const bloque = document.createElement("div");
+    bloque.className = "resultado-bloque";
+    if (mostrarEtiquetas) {
+      const etiqueta = document.createElement("h3");
+      etiqueta.className = "resultado-etiqueta";
+      etiqueta.textContent = `Resultado ${indice + 1}`;
+      bloque.appendChild(etiqueta);
+    }
+    if (resultado.error) {
+      const error = document.createElement("p");
+      error.className = "resultado-error";
+      error.textContent = resultado.error;
+      bloque.appendChild(error);
+    } else {
+      bloque.appendChild(crearTablaFilas(resultado.rows));
+    }
+    resultTable.appendChild(bloque);
+  });
 }
 
 function setStatus(text, kind) {
@@ -183,15 +207,67 @@ function textoAEjecutar() {
   return sqlInput.value;
 }
 
+function dividirSentencias(sql) {
+  const sentencias = [];
+  let actual = "";
+  let comilla = null;
+  for (const caracter of sql) {
+    if (comilla) {
+      actual += caracter;
+      if (caracter === comilla) comilla = null;
+      continue;
+    }
+    if (caracter === "'" || caracter === '"') {
+      comilla = caracter;
+      actual += caracter;
+      continue;
+    }
+    if (caracter === ";") {
+      sentencias.push(actual);
+      actual = "";
+      continue;
+    }
+    actual += caracter;
+  }
+  sentencias.push(actual);
+  return sentencias.map((s) => s.trim()).filter((s) => s.length > 0);
+}
+
 async function runQuery() {
   setStatus("Ejecutando...", "");
   try {
     const result = await invoke("run_query", { sql: textoAEjecutar() });
     setStatus(`OK — ${result.rows.length} fila(s)`, "ok");
-    renderRows(result.rows);
+    renderResultados([{ rows: result.rows }]);
   } catch (err) {
     setStatus(String(err), "error");
     resultTable.innerHTML = "";
+  }
+}
+
+async function runAllQueries() {
+  const sentencias = dividirSentencias(sqlInput.value);
+  if (sentencias.length === 0) {
+    setStatus("No hay ninguna consulta que ejecutar.", "error");
+    return;
+  }
+  setStatus("Ejecutando...", "");
+  const resultados = [];
+  let errores = 0;
+  for (const sentencia of sentencias) {
+    try {
+      const result = await invoke("run_query", { sql: sentencia });
+      resultados.push({ rows: result.rows });
+    } catch (err) {
+      errores += 1;
+      resultados.push({ error: String(err) });
+    }
+  }
+  renderResultados(resultados);
+  if (errores === 0) {
+    setStatus(`OK — ${sentencias.length} consulta(s) ejecutada(s)`, "ok");
+  } else {
+    setStatus(`${errores} de ${sentencias.length} consulta(s) con error`, "error");
   }
 }
 
@@ -593,6 +669,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   await mostrarMenu();
 
   document.querySelector("#btn-play").addEventListener("click", runQuery);
+  document.querySelector("#btn-ejecutar-todas").addEventListener("click", runAllQueries);
   document.querySelector("#btn-submit").addEventListener("click", submitTicket);
   document.querySelector("#btn-cerrar-dia").addEventListener("click", cerrarDia);
   btnCerrarScoring.addEventListener("click", () => {
