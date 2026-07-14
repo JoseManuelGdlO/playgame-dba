@@ -663,3 +663,81 @@ tr:nth-child(even) td {
   align-items: center;
   gap: 0.5rem;
 }
+
+.panel-stats-placeholder {
+  background: #f7f0dc;
+  border-radius: 2px;
+  padding: 0.75rem 0.9rem;
+  box-shadow: 2px 3px 8px rgba(0, 0, 0, 0.25);
+  opacity: 0.55;
+  margin-top: 0.75rem;
+}
+
+.panel-stats-titulo {
+  font-size: 0.5rem;
+  text-transform: uppercase;
+  color: #8a7355;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.4rem;
+}
+
+.panel-stats-texto {
+  font-size: 0.6rem;
+  color: #8a7355;
+}
+
+.mancha-cafe {
+  width: 50px;
+  height: 50px;
+  border: 3px solid rgba(90, 60, 30, 0.25);
+  border-radius: 50%;
+  margin: 1.25rem auto 0;
+}
+
+.barra-pestanas {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 1.1rem;
+}
+
+.pestana {
+  background: #6b5a45;
+  color: #a89878;
+  padding: 0.5rem 1rem;
+  border-radius: 4px 4px 0 0;
+  font-size: 0.65rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+.pestana:hover {
+  opacity: 1;
+}
+
+.pestana-activa {
+  background: #2a2018;
+  color: #e8dcc0;
+  opacity: 1;
+}
+
+.pestana-bloqueada {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sello-confidencial {
+  position: absolute;
+  bottom: 3.5rem;
+  right: 1.25rem;
+  border: 2px solid #a13a3a;
+  color: #a13a3a;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.55rem;
+  font-weight: 700;
+  transform: rotate(-8deg);
+  opacity: 0.55;
+  pointer-events: none;
+}

@@ -366,9 +366,14 @@ function renderPerks(perks) {
     li.className = `papel papel-perk papel-entrando ${perk.equipado ? "equipado" : perk.desbloqueado ? "desbloqueado" : ""}`.trim();
     li.style.animationDelay = `${indice * 60}ms`;
 
+    const ICONO_EQUIPADO = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2l2.9 6.3 6.9.6-5.2 4.6 1.6 6.8L12 17l-6.2 3.3 1.6-6.8L2.2 8.9l6.9-.6z"/></svg>`;
+    const ICONO_DESBLOQUEADO = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`;
+    const ICONO_BLOQUEADO = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="1"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`;
+
     const info = document.createElement("span");
-    const estado = perk.equipado ? "⭐ equipado" : perk.desbloqueado ? "✅ desbloqueado" : "🔒 bloqueado";
-    info.textContent = `${perk.nombre} (${perk.categoria}) — ${estado} — $${perk.costo_dinero}, ⭐${perk.reputacion_minima}`;
+    const iconoEstado = perk.equipado ? ICONO_EQUIPADO : perk.desbloqueado ? ICONO_DESBLOQUEADO : ICONO_BLOQUEADO;
+    const textoEstado = perk.equipado ? "equipado" : perk.desbloqueado ? "desbloqueado" : "bloqueado";
+    info.innerHTML = `${iconoEstado} ${perk.nombre} (${perk.categoria}) — ${textoEstado} — $${perk.costo_dinero}, ⭐${perk.reputacion_minima}`;
 
     const boton = document.createElement("button");
     boton.textContent = perk.equipado ? "Desequipar" : perk.desbloqueado ? "Equipar" : "Desbloquear";
@@ -473,5 +478,17 @@ window.addEventListener("DOMContentLoaded", async () => {
   btnMuteEfectos.addEventListener("click", () => {
     const activos = alternarEfectos();
     btnMuteEfectos.textContent = activos ? "🔊" : "🔇";
+  });
+
+  document.querySelector("#tab-dashboard").addEventListener("click", () => {
+    document.querySelector(".hub-columna-bandeja").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  document.querySelector("#tab-perks").addEventListener("click", () => {
+    document.querySelector(".hub-columna-perks").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  document.querySelector("#tab-logros").addEventListener("click", () => {
+    setStatus("Próximamente.", "");
   });
 });
