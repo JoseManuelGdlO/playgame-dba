@@ -1,3 +1,5 @@
+import { sfxClick, sfxTecleo, sfxCierreDia, iniciarAmbiente, alternarMusica, alternarEfectos } from "./audio.js";
+
 const { invoke } = window.__TAURI__.core;
 
 let sqlInput, statusMsg, resultTable, dineroEl, reputacionEl, rangoEl;
@@ -6,6 +8,7 @@ let presupuestoEl, listaTickets, ticketActivoInfo, bandejaTitulo;
 let scoringOverlay, scoringAscenso, agenciaOverlay;
 let pantallaMenu, appShell, pantallaHub, pantallaConsola, btnCargarPartida;
 let ticketRetrato, consolaTitulo;
+let btnMuteMusica, btnMuteEfectos;
 
 const RETRATOS = {
   generico: `<svg viewBox="0 0 8 8"><rect width="8" height="8" fill="#4a4a3a"/><rect x="2" y="1" width="4" height="3" fill="#8a8266"/><rect x="1" y="4" width="6" height="3" fill="#6b6b52"/><rect x="3" y="2" width="1" height="1" fill="#2a2a1f"/><rect x="5" y="2" width="1" height="1" fill="#2a2a1f"/></svg>`,
@@ -175,6 +178,7 @@ async function cerrarDia() {
   ticketActivoId = null;
   renderBandeja(estadoTurno);
   setStatus("Día cerrado. Turno nuevo.", "ok");
+  sfxCierreDia();
 }
 
 async function confirmarTransicionAgencia() {
@@ -306,6 +310,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   btnCargarPartida = document.querySelector("#btn-cargar-partida");
   ticketRetrato = document.querySelector("#ticket-retrato");
   consolaTitulo = document.querySelector("#consola-titulo");
+  btnMuteMusica = document.querySelector("#btn-mute-musica");
+  btnMuteEfectos = document.querySelector("#btn-mute-efectos");
 
   await mostrarMenu();
 
@@ -323,5 +329,24 @@ window.addEventListener("DOMContentLoaded", async () => {
     ticketActivoId = null;
     ticketActivoInfo.textContent = "Elige un ticket de la bandeja para empezar.";
     mostrarPantalla("hub");
+  });
+
+  document.addEventListener("click", (evento) => {
+    if (evento.target.closest("button")) {
+      iniciarAmbiente();
+      sfxClick();
+    }
+  });
+
+  sqlInput.addEventListener("keydown", () => sfxTecleo());
+
+  btnMuteMusica.addEventListener("click", () => {
+    const activa = alternarMusica();
+    btnMuteMusica.textContent = activa ? "🔊" : "🔇";
+  });
+
+  btnMuteEfectos.addEventListener("click", () => {
+    const activos = alternarEfectos();
+    btnMuteEfectos.textContent = activos ? "🔊" : "🔇";
   });
 });

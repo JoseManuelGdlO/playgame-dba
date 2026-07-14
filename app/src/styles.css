@@ -343,3 +343,20 @@ tr:nth-child(even) td {
   margin: 0.4rem 0;
   font-size: 1.1rem;
 }
+
+.control-audio {
+  position: fixed;
+  top: 0.75rem;
+  z-index: 10;
+  padding: 0.3rem 0.5rem;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+#btn-mute-musica {
+  right: 0.75rem;
+}
+
+#btn-mute-efectos {
+  right: 3.25rem;
+}
