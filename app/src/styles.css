@@ -482,3 +482,137 @@ tr:nth-child(even) td {
 #btn-mute-efectos {
   right: 3.25rem;
 }
+
+.hub-folder {
+  background: linear-gradient(155deg, #c9a876, #b8965f);
+  border-radius: 10px;
+  color: #2a2018;
+  position: relative;
+}
+
+.hub-topbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.hub-badge {
+  background: #f0e6d2;
+  border: 2px solid #2a2018;
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  color: #2a2018;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.2);
+}
+
+.hub-grid {
+  display: grid;
+  grid-template-columns: 170px 1fr 220px;
+  gap: 1rem;
+  align-items: start;
+}
+
+.tarjeta-perfil {
+  background: #f7f0dc;
+  border-radius: 2px;
+  padding: 0.9rem;
+  box-shadow: 3px 4px 10px rgba(0, 0, 0, 0.35);
+  transform: rotate(-1.2deg);
+  margin-bottom: 0.9rem;
+  position: relative;
+}
+
+.tarjeta-perfil-titulo {
+  font-size: 0.5rem;
+  text-transform: uppercase;
+  color: #8a7355;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.5rem;
+}
+
+.tarjeta-perfil-avatar {
+  width: 60px;
+  height: 60px;
+  background: #3a3a2e;
+  border: 3px solid #6b6b52;
+  border-radius: 4px;
+  margin: 0 auto 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tarjeta-perfil-avatar svg {
+  width: 42px;
+  height: 42px;
+}
+
+.tarjeta-perfil-rango {
+  text-align: center;
+  font-size: 0.7rem;
+  color: #2a2018;
+  font-weight: 700;
+}
+
+.tarjeta-perfil-rango-label {
+  text-align: center;
+  font-size: 0.5rem;
+  color: #8a7355;
+  margin-top: 0.1rem;
+}
+
+.tarjeta-progreso-carrera {
+  background: #f5e28a;
+  border-radius: 2px;
+  padding: 0.6rem 0.75rem;
+  box-shadow: 2px 3px 8px rgba(0, 0, 0, 0.3);
+  transform: rotate(0.8deg);
+}
+
+.tarjeta-progreso-titulo {
+  font-size: 0.5rem;
+  text-transform: uppercase;
+  color: #6b5a2a;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.4rem;
+}
+
+.progreso-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.65rem;
+  margin-bottom: 0.3rem;
+}
+
+.progreso-actual {
+  color: #2a4a1a;
+}
+
+.progreso-siguiente {
+  color: #2a2018;
+  font-weight: 700;
+}
+
+.progreso-futuro {
+  color: #9a9370;
+  opacity: 0.7;
+}
+
+.clip-papel {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 12px;
+  background: #c0c0c0;
+  border-radius: 2px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}

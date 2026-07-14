@@ -10,6 +10,8 @@ let pantallaMenu, appShell, pantallaHub, pantallaConsola, btnCargarPartida;
 let ticketRetrato, consolaTitulo;
 let btnMuteMusica, btnMuteEfectos;
 let btnCerrarScoring;
+let headerAppShell, dineroHubEl, reputacionHubEl;
+let rangoPerfilEl, progresoRangoActualTextoEl, progresoRangoSiguienteEl;
 
 const RETRATOS = {
   generico: `<svg viewBox="0 0 8 8"><rect width="8" height="8" fill="#4a4a3a"/><rect x="2" y="1" width="4" height="3" fill="#8a8266"/><rect x="1" y="4" width="6" height="3" fill="#6b6b52"/><rect x="3" y="2" width="1" height="1" fill="#2a2a1f"/><rect x="5" y="2" width="1" height="1" fill="#2a2a1f"/></svg>`,
@@ -43,6 +45,7 @@ function mostrarPantalla(nombre) {
   alternarPantalla(appShell, nombre !== "menu");
   alternarPantalla(pantallaHub, nombre === "hub");
   alternarPantalla(pantallaConsola, nombre === "consola");
+  headerAppShell.classList.toggle("oculto", nombre === "hub");
 }
 
 const TITULO_FASE = {
@@ -54,8 +57,29 @@ const NOMBRE_RANGO = {
   AuxiliarDeSistemas: "Auxiliar de Sistemas",
 };
 
+const ORDEN_RANGOS = ["Becario", "AuxiliarDeSistemas"];
+
 function renderRango(rango) {
-  rangoEl.textContent = NOMBRE_RANGO[rango] || rango;
+  const nombre = NOMBRE_RANGO[rango] || rango;
+  rangoEl.textContent = nombre;
+  rangoPerfilEl.textContent = nombre;
+  progresoRangoActualTextoEl.textContent = nombre;
+
+  const indiceActual = ORDEN_RANGOS.indexOf(rango);
+  const siguienteRango = ORDEN_RANGOS[indiceActual + 1];
+  progresoRangoSiguienteEl.textContent = siguienteRango
+    ? `➜ ${NOMBRE_RANGO[siguienteRango]}`
+    : "Alcanzaste el máximo rango disponible";
+}
+
+function actualizarDinero(valor) {
+  dineroEl.textContent = valor;
+  dineroHubEl.textContent = valor;
+}
+
+function actualizarReputacion(valorFormateado) {
+  reputacionEl.textContent = valorFormateado;
+  reputacionHubEl.textContent = valorFormateado;
 }
 
 let ticketActivoId = null;
@@ -160,8 +184,8 @@ async function cargarTurno() {
 }
 
 function pintarHubDesdeEstadoJuego(estadoJuego) {
-  dineroEl.textContent = estadoJuego.dinero;
-  reputacionEl.textContent = estadoJuego.reputacion.toFixed(1);
+  actualizarDinero(estadoJuego.dinero);
+  actualizarReputacion(estadoJuego.reputacion.toFixed(1));
   renderRango(estadoJuego.rango);
   renderBandeja(estadoJuego);
   ticketActivoId = null;
@@ -203,7 +227,7 @@ async function cerrarDia() {
 async function confirmarTransicionAgencia() {
   try {
     const estadoTurno = await invoke("confirmar_transicion_agencia");
-    reputacionEl.textContent = "0.0";
+    actualizarReputacion("0.0");
     agenciaOverlay.classList.add("oculto");
     ticketActivoId = null;
     renderBandeja(estadoTurno);
@@ -291,8 +315,8 @@ async function submitTicket() {
   setStatus("Enviando ticket...", "");
   try {
     const score = await invoke("resolver_ticket", { id: ticketActivoId, sql: sqlInput.value });
-    dineroEl.textContent = score.dinero_total;
-    reputacionEl.textContent = score.reputacion_total.toFixed(1);
+    actualizarDinero(score.dinero_total);
+    actualizarReputacion(score.reputacion_total.toFixed(1));
     renderRango(score.rango_actual);
     mostrarScoring(score);
     setStatus(score.mensaje, score.pass ? "ok" : "error");
@@ -374,6 +398,12 @@ window.addEventListener("DOMContentLoaded", async () => {
   btnMuteMusica = document.querySelector("#btn-mute-musica");
   btnMuteEfectos = document.querySelector("#btn-mute-efectos");
   btnCerrarScoring = document.querySelector("#btn-cerrar-scoring");
+  headerAppShell = document.querySelector("#header-app-shell");
+  dineroHubEl = document.querySelector("#dinero-hub");
+  reputacionHubEl = document.querySelector("#reputacion-hub");
+  rangoPerfilEl = document.querySelector("#rango-perfil");
+  progresoRangoActualTextoEl = document.querySelector("#progreso-rango-actual-texto");
+  progresoRangoSiguienteEl = document.querySelector("#progreso-rango-siguiente");
 
   await mostrarMenu();
 

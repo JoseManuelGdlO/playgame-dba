@@ -24,7 +24,7 @@
     </div>
 
     <div id="app-shell" class="oculto escritorio">
-      <header>
+      <header id="header-app-shell">
         <h1>Query Path <span class="subtitle">— spike técnico (Tauri + Postgres embebido)</span></h1>
         <div class="stats">
           <span>💰 <span id="dinero">0</span></span>
@@ -33,19 +33,57 @@
         </div>
       </header>
 
-      <main class="container" id="pantalla-hub">
-        <section class="bandeja">
-          <h2 id="bandeja-titulo">Bandeja — turno actual</h2>
-          <p>⏱️ Presupuesto de tiempo: <span id="presupuesto">0</span></p>
-          <ul id="lista-tickets"></ul>
-          <button id="btn-cerrar-dia">Cerrar día</button>
-        </section>
+      <main class="container hub-folder" id="pantalla-hub">
+        <div class="hub-topbar">
+          <div class="hub-badge">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5c0-1 1-1.5 3-1.5s3 1 3 2-1 1.5-3 1.5-3 .5-3 1.5 1 2 3 2 3-.5 3-1.5"/></svg>
+            <span id="dinero-hub">0</span>
+          </div>
+          <div class="hub-badge">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2l2.9 6.3 6.9.6-5.2 4.6 1.6 6.8L12 17l-6.2 3.3 1.6-6.8L2.2 8.9l6.9-.6z"/></svg>
+            <span id="reputacion-hub">0</span>
+          </div>
+        </div>
 
-        <section class="perks">
-          <h2>Perks</h2>
-          <ul id="lista-perks"></ul>
-          <p id="perks-equipados-msg"></p>
-        </section>
+        <div class="hub-grid">
+          <div class="hub-columna-perfil">
+            <div class="tarjeta-perfil">
+              <div class="clip-papel"></div>
+              <div class="tarjeta-perfil-titulo">Tu perfil</div>
+              <div class="tarjeta-perfil-avatar">
+                <svg viewBox="0 0 8 8"><rect width="8" height="8" fill="#4a4a3a"/><rect x="2" y="1" width="4" height="3" fill="#8a8266"/><rect x="1" y="4" width="6" height="3" fill="#6b6b52"/></svg>
+              </div>
+              <div class="tarjeta-perfil-rango" id="rango-perfil">Becario</div>
+              <div class="tarjeta-perfil-rango-label">Rango actual</div>
+            </div>
+
+            <div class="tarjeta-progreso-carrera">
+              <div class="tarjeta-progreso-titulo">Progreso de carrera</div>
+              <div class="progreso-item progreso-actual">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                <span id="progreso-rango-actual-texto">Becario</span>
+              </div>
+              <div class="progreso-item progreso-siguiente" id="progreso-rango-siguiente">➜ Auxiliar de Sistemas</div>
+              <div class="progreso-item progreso-futuro">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="1"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+                Próximamente...
+              </div>
+            </div>
+          </div>
+
+          <section class="bandeja hub-columna-bandeja">
+            <h2 id="bandeja-titulo">Bandeja — turno actual</h2>
+            <p>⏱️ Presupuesto de tiempo: <span id="presupuesto">0</span></p>
+            <ul id="lista-tickets"></ul>
+            <button id="btn-cerrar-dia">Cerrar día</button>
+          </section>
+
+          <section class="perks hub-columna-perks">
+            <h2>Perks</h2>
+            <ul id="lista-perks"></ul>
+            <p id="perks-equipados-msg"></p>
+          </section>
+        </div>
       </main>
 
       <main class="container oculto" id="pantalla-consola">
