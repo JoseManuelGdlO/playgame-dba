@@ -822,3 +822,9 @@ button,
   width: 100%;
   margin-top: 0.6rem;
 }
+
+#pausa-overlay .pausa-opciones-audio button {
+  display: inline-block;
+  width: auto;
+  margin-top: 0;
+}
