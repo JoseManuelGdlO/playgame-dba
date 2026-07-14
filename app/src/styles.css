@@ -467,20 +467,9 @@ tr:nth-child(even) td {
 }
 
 .control-audio {
-  position: fixed;
-  top: 0.75rem;
-  z-index: 10;
   padding: 0.3rem 0.5rem;
   font-size: 1rem;
   line-height: 1;
-}
-
-#btn-mute-musica {
-  right: 0.75rem;
-}
-
-#btn-mute-efectos {
-  right: 3.25rem;
 }
 
 .hub-folder {
@@ -808,4 +797,28 @@ button,
   color: #5a4a35;
   line-height: 1.5;
   margin: 0;
+}
+
+.pausa-opciones {
+  margin: 1rem 0;
+}
+
+.pausa-opciones-titulo {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9399b2;
+  margin: 0 0 0.5rem;
+}
+
+.pausa-opciones-audio {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+#pausa-overlay .scoring-panel button {
+  display: block;
+  width: 100%;
+  margin-top: 0.6rem;
 }

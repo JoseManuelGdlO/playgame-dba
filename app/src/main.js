@@ -7,6 +7,7 @@ let listaPerks, perksEquipadosMsg;
 let presupuestoEl, listaTickets, ticketActivoInfo, bandejaTitulo;
 let scoringOverlay, scoringAscenso, agenciaOverlay;
 let pantallaMenu, appShell, pantallaHub, pantallaConsola, btnCargarPartida;
+let pausaOverlay;
 let ticketRetrato, consolaTitulo;
 let btnMuteMusica, btnMuteEfectos;
 let btnCerrarScoring;
@@ -448,6 +449,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   scoringOverlay = document.querySelector("#scoring-overlay");
   scoringAscenso = document.querySelector("#scoring-ascenso");
   agenciaOverlay = document.querySelector("#agencia-overlay");
+  pausaOverlay = document.querySelector("#pausa-overlay");
   pantallaMenu = document.querySelector("#pantalla-menu");
   appShell = document.querySelector("#app-shell");
   pantallaHub = document.querySelector("#pantalla-hub");
@@ -515,6 +517,28 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   document.querySelector("#tab-logros").addEventListener("click", () => {
     setStatus("Próximamente.", "");
+  });
+
+  document.querySelector("#btn-guardar-pausa").addEventListener("click", () => {
+    setStatus("Partida guardada.", "ok");
+  });
+
+  document.querySelector("#btn-salir-pausa").addEventListener("click", async () => {
+    pausaOverlay.classList.add("oculto");
+    await mostrarMenu();
+  });
+
+  document.querySelector("#btn-continuar-pausa").addEventListener("click", () => {
+    pausaOverlay.classList.add("oculto");
+  });
+
+  document.addEventListener("keydown", (evento) => {
+    if (evento.key !== "Escape") return;
+    if (appShell.classList.contains("oculto")) return;
+    const hayOverlayResultado = !scoringOverlay.classList.contains("oculto");
+    const hayOverlayAgencia = !agenciaOverlay.classList.contains("oculto");
+    if (hayOverlayResultado || hayOverlayAgencia) return;
+    pausaOverlay.classList.toggle("oculto");
   });
 
   document.addEventListener("mouseover", (evento) => {

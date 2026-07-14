@@ -10,8 +10,6 @@
 
   <body>
     <p id="status-msg"></p>
-    <button id="btn-mute-musica" class="control-audio" title="Silenciar música">🔊</button>
-    <button id="btn-mute-efectos" class="control-audio" title="Silenciar efectos">🔊</button>
     <div id="tooltip-global" class="tooltip-global oculto"></div>
     <div id="pantalla-menu">
       <header>
@@ -186,6 +184,32 @@
           <p>Has superado al Auditor de Cumplimiento. Tu siguiente asignación:</p>
           <p><strong>Postafeta</strong> — todo el Slack de la empresa lo administra un becario invisible llamado Kevin; todo viene firmado "- Kevin".</p>
           <button id="btn-confirmar-agencia">Aceptar reasignación</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="pausa-overlay" class="scoring-overlay oculto">
+      <div class="ventana-terminal">
+        <div class="ventana-terminal-barra">
+          <span class="ventana-terminal-punto rojo"></span>
+          <span class="ventana-terminal-punto amarillo"></span>
+          <span class="ventana-terminal-punto verde"></span>
+          <span class="ventana-terminal-titulo">query-path — pausa</span>
+        </div>
+        <div class="ventana-terminal-cuerpo scoring-panel">
+          <h2>Pausa</h2>
+          <button id="btn-guardar-pausa">Guardar</button>
+
+          <div class="pausa-opciones">
+            <p class="pausa-opciones-titulo">Opciones</p>
+            <div class="pausa-opciones-audio">
+              <button id="btn-mute-musica" class="control-audio" title="Silenciar música">🔊</button>
+              <button id="btn-mute-efectos" class="control-audio" title="Silenciar efectos">🔊</button>
+            </div>
+          </div>
+
+          <button id="btn-salir-pausa">Salir al Menú</button>
+          <button id="btn-continuar-pausa">Continuar</button>
         </div>
       </div>
     </div>
