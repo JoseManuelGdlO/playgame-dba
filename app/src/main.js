@@ -23,6 +23,17 @@ function retratoParaSolicitante(solicitante) {
   return RETRATOS[solicitante] || RETRATOS.generico;
 }
 
+const ICONOS_TIPO_TICKET = {
+  ReporteAnalisis: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><rect x="4" y="3" width="16" height="18" rx="1"/><path d="M8 12v4M12 9v7M16 13v3"/></svg>`,
+  InvestigacionDepuracion: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="10" r="6"/><path d="M20 20l-5.5-5.5"/></svg>`,
+};
+
+const PRIORIDAD_INFO = {
+  Baja: { color: "#5a7a3a", etiqueta: "BAJA" },
+  Media: { color: "#9a7a2a", etiqueta: "MEDIA" },
+  Urgente: { color: "#a13a54", etiqueta: "URGENTE" },
+};
+
 const DURACION_TRANSICION_MS = 250;
 
 function alternarPantalla(el, mostrar) {
@@ -158,15 +169,37 @@ function renderBandeja(estadoTurno) {
   listaTickets.innerHTML = "";
   estadoTurno.pendientes.forEach((ticket, indice) => {
     const li = document.createElement("li");
-    li.className = "papel papel-entrando";
+    li.className = "papel papel-entrando papel-ticket";
     li.style.animationDelay = `${indice * 60}ms`;
-    const info = document.createElement("span");
+
+    const clip = document.createElement("div");
+    clip.className = "clip-papel";
+    li.appendChild(clip);
+
+    const icono = document.createElement("div");
+    icono.className = "icono-tipo-ticket";
+    icono.innerHTML = ICONOS_TIPO_TICKET[ticket.tipo] || ICONOS_TIPO_TICKET.ReporteAnalisis;
+    li.appendChild(icono);
+
+    const detalle = document.createElement("div");
+    detalle.className = "papel-ticket-detalle";
+    const info = document.createElement("div");
+    info.className = "papel-ticket-motivo";
     info.textContent = `[⏱️ ${ticket.costo_tiempo}] ${ticket.motivo}`;
+    const prioridad = PRIORIDAD_INFO[ticket.prioridad] || PRIORIDAD_INFO.Baja;
+    const etiquetaPrioridad = document.createElement("div");
+    etiquetaPrioridad.className = "papel-ticket-prioridad";
+    etiquetaPrioridad.style.color = prioridad.color;
+    etiquetaPrioridad.textContent = `● ${prioridad.etiqueta}`;
+    detalle.appendChild(info);
+    detalle.appendChild(etiquetaPrioridad);
+    li.appendChild(detalle);
+
     const boton = document.createElement("button");
     boton.textContent = ticket.id === ticketActivoId ? "En curso" : "Trabajar en este";
     boton.addEventListener("click", () => seleccionarTicket(ticket));
-    li.appendChild(info);
     li.appendChild(boton);
+
     listaTickets.appendChild(li);
   });
   if (!estadoTurno.pendientes.some((t) => t.id === ticketActivoId)) {
