@@ -329,6 +329,16 @@ function seleccionarTicket(ticket) {
 }
 
 function actualizarPanelArco({ empresa, fase, pendientesCount, presupuesto }) {
+  if (
+    !panelArcoCaminoEl ||
+    !panelArcoFillEl ||
+    !panelArcoRepEl ||
+    !panelArcoTurnoEl ||
+    !panelArcoLabelEl
+  ) {
+    return;
+  }
+
   const mostrarCamino =
     empresa === "HospitalArcangel" &&
     (rangoActual === "Becario" || fase === "MiniBoss");
@@ -353,6 +363,8 @@ function actualizarPanelArco({ empresa, fase, pendientesCount, presupuesto }) {
 }
 
 function sincronizarModoBoss(fase) {
+  if (!pantallaHub || !bossBannerEl) return;
+
   const enBoss = fase === "MiniBoss";
   modoBossActivo = enBoss;
   pantallaHub.classList.toggle("hub-boss", enBoss);
@@ -370,12 +382,59 @@ function sincronizarModoBoss(fase) {
 }
 
 function mostrarBannerBoss() {
+  if (!bossBannerEl) return;
+
   bannerBossMostrado = true;
   bossBannerEl.classList.remove("oculto");
   if (bossBannerTimer) clearTimeout(bossBannerTimer);
   bossBannerTimer = setTimeout(() => {
     bossBannerEl.classList.add("oculto");
   }, 2800);
+}
+
+function mostrarPopBadge(el, texto, esNegativo = false) {
+  if (!el) return;
+  el.textContent = texto;
+  el.classList.toggle("es-negativo", esNegativo);
+  el.classList.remove("oculto");
+  el.style.animation = "none";
+  void el.offsetHeight;
+  el.style.animation = "";
+  setTimeout(() => el.classList.add("oculto"), 1600);
+}
+
+function mostrarToastTicket(feedback) {
+  if (!ticketToastEl || !feedback) return;
+  const lineaResultado = feedback.pass ? "Resuelto" : "Incorrecto";
+  const partes = [`${lineaResultado} · ${feedback.titulo}`];
+  if (feedback.pass) {
+    partes.push(`+$${feedback.deltaDinero} · +${feedback.deltaRep} rep`);
+  }
+  ticketToastEl.textContent = partes.join("\n");
+  ticketToastEl.classList.toggle("es-fallo", !feedback.pass);
+  ticketToastEl.classList.remove("oculto");
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => ticketToastEl.classList.add("oculto"), 3000);
+}
+
+function aplicarFeedbackEnHub() {
+  if (!ultimoFeedback) return;
+  const feedback = ultimoFeedback;
+  ultimoFeedback = null;
+
+  mostrarToastTicket(feedback);
+
+  if (feedback.pass && feedback.deltaDinero !== 0) {
+    mostrarPopBadge(dineroHubPopEl, `+$${feedback.deltaDinero}`);
+  }
+  if (feedback.pass && feedback.deltaRep !== 0) {
+    mostrarPopBadge(reputacionHubPopEl, `+${feedback.deltaRep}`);
+  }
+
+  if (feedback.ascendio) {
+    bannerBossMostrado = false;
+    sincronizarModoBoss("MiniBoss");
+  }
 }
 
 function renderBandeja(estadoTurno) {
@@ -597,6 +656,13 @@ async function submitTicket() {
       setStatus(score.mensaje, "error");
       return false;
     }
+    ultimoFeedback = {
+      titulo: ticketActivoMotivo || ticketActivoId || "Ticket",
+      pass: score.pass,
+      deltaDinero: score.dinero_ganado,
+      deltaRep: score.reputacion_ganada,
+      ascendio: score.ascendio,
+    };
     actualizarDinero(score.dinero_total);
     actualizarReputacion(score.reputacion_total.toFixed(1));
     renderRango(score.rango_actual);
@@ -821,6 +887,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   btnCerrarScoring.addEventListener("click", () => {
     scoringOverlay.classList.add("oculto");
     mostrarPantalla("hub");
+    aplicarFeedbackEnHub();
     notificarCierreScoring();
   });
   document.querySelector("#btn-confirmar-agencia").addEventListener("click", confirmarTransicionAgencia);
