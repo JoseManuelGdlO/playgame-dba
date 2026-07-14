@@ -47,7 +47,10 @@ pub struct QueryResult {
 /// cero red en runtime). Devuelve el manejador del servidor — hay que mantenerlo
 /// vivo mientras la app corra.
 pub async fn init_embedded_postgres() -> anyhow::Result<PostgreSQL> {
-    let settings = Settings::new();
+    // Default del crate es 5s; en Windows el primer `initdb` suele tardar mucho
+    // más (antivirus / cold start). 120s da margen sin dejar el arranque colgado.
+    let mut settings = Settings::new();
+    settings.timeout = Some(std::time::Duration::from_secs(120));
     let mut pg = PostgreSQL::new(settings);
     pg.setup().await?;
     pg.start().await?;
