@@ -108,6 +108,10 @@
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2l7 4v6c0 5-3 8-7 10-4-2-7-5-7-10V6z"/></svg>
             Perks
           </div>
+          <div class="pestana" id="tab-base-datos">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
+            Base de Datos
+          </div>
           <div class="pestana pestana-bloqueada" id="tab-logros" title="Próximamente">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M8 4h8v4a4 4 0 0 1-8 0z"/><path d="M8 5H5a2 2 0 0 0 2 4M16 5h3a2 2 0 0 1-2 4"/><path d="M12 12v3M9 20h6M10 17h4l1 3H9z"/></svg>
             Mis Logros
@@ -137,6 +141,7 @@
               <div class="actions">
                 <button id="btn-play">▶ Play</button>
                 <button id="btn-submit">✓ Enviar ticket</button>
+                <button id="btn-ver-esquema">Ver esquema</button>
               </div>
             </section>
 
@@ -210,6 +215,23 @@
 
           <button id="btn-salir-pausa">Salir al Menú</button>
           <button id="btn-continuar-pausa">Continuar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="esquema-overlay" class="scoring-overlay oculto">
+      <div class="ventana-terminal ventana-esquema">
+        <div class="ventana-terminal-barra">
+          <span class="ventana-terminal-punto rojo"></span>
+          <span class="ventana-terminal-punto amarillo"></span>
+          <span class="ventana-terminal-punto verde"></span>
+          <span class="ventana-terminal-titulo">query-path — esquema</span>
+        </div>
+        <div class="ventana-terminal-cuerpo esquema-cuerpo">
+          <div class="esquema-lienzo" id="esquema-lienzo">
+            <svg class="esquema-svg" id="esquema-svg"></svg>
+          </div>
+          <button id="btn-cerrar-esquema">Cerrar</button>
         </div>
       </div>
     </div>

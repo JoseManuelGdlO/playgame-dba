@@ -15,6 +15,9 @@ let headerAppShell, dineroHubEl, reputacionHubEl;
 let rangoPerfilEl, progresoRangoActualTextoEl, progresoRangoSiguienteEl;
 let tooltipGlobal;
 let empresaNombreEl, empresaDescripcionEl;
+let esquemaOverlay, esquemaLienzo, esquemaSvg;
+let posicionesActuales = {};
+let esquemaRelacionesActuales = [];
 
 const RETRATOS = {
   generico: `<svg viewBox="0 0 8 8"><rect width="8" height="8" fill="#4a4a3a"/><rect x="2" y="1" width="4" height="3" fill="#8a8266"/><rect x="1" y="4" width="6" height="3" fill="#6b6b52"/><rect x="3" y="2" width="1" height="1" fill="#2a2a1f"/><rect x="5" y="2" width="1" height="1" fill="#2a2a1f"/></svg>`,
@@ -79,6 +82,24 @@ const EMPRESA_INFO = {
   },
 };
 
+const POSICIONES_TABLAS = {
+  HospitalArcangel: {
+    departamentos: { x: 80, y: 80 },
+    empleados: { x: 420, y: 60 },
+    seguros: { x: 780, y: 80 },
+    habitaciones: { x: 80, y: 380 },
+    pacientes: { x: 420, y: 320 },
+    tratamientos: { x: 420, y: 560 },
+  },
+  Postafeta: {
+    sucursales: { x: 420, y: 60 },
+    empleados: { x: 80, y: 300 },
+    clientes: { x: 780, y: 300 },
+    paquetes: { x: 420, y: 320 },
+    incidencias: { x: 420, y: 560 },
+  },
+};
+
 const NOMBRE_RANGO = {
   Becario: "Becario",
   AuxiliarDeSistemas: "Auxiliar de Sistemas",
@@ -110,6 +131,7 @@ function actualizarReputacion(valorFormateado) {
 }
 
 let ticketActivoId = null;
+let empresaActual = null;
 
 function renderRows(rows) {
   resultTable.innerHTML = "";
@@ -182,6 +204,7 @@ function seleccionarTicket(ticket) {
 function renderBandeja(estadoTurno) {
   presupuestoEl.textContent = estadoTurno.presupuesto_restante;
   bandejaTitulo.textContent = TITULO_FASE[estadoTurno.fase] || "Bandeja — turno actual";
+  empresaActual = estadoTurno.empresa;
   const empresa = EMPRESA_INFO[estadoTurno.empresa];
   if (empresa) {
     empresaNombreEl.textContent = empresa.nombre;
@@ -433,6 +456,88 @@ async function accionPerk(perk) {
   }
 }
 
+function dibujarRelaciones(relaciones) {
+  esquemaRelacionesActuales = relaciones;
+  esquemaSvg.innerHTML = "";
+  relaciones.forEach((rel) => {
+    if (rel.tabla_origen === rel.tabla_destino) return;
+    const origen = posicionesActuales[rel.tabla_origen];
+    const destino = posicionesActuales[rel.tabla_destino];
+    if (!origen || !destino) return;
+    const cajaOrigen = esquemaLienzo.querySelector(`[data-tabla="${rel.tabla_origen}"]`);
+    const cajaDestino = esquemaLienzo.querySelector(`[data-tabla="${rel.tabla_destino}"]`);
+    if (!cajaOrigen || !cajaDestino) return;
+
+    const x1 = origen.x + cajaOrigen.offsetWidth / 2;
+    const y1 = origen.y + cajaOrigen.offsetHeight / 2;
+    const x2 = destino.x + cajaDestino.offsetWidth / 2;
+    const y2 = destino.y + cajaDestino.offsetHeight / 2;
+
+    const linea = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    linea.setAttribute("x1", x1);
+    linea.setAttribute("y1", y1);
+    linea.setAttribute("x2", x2);
+    linea.setAttribute("y2", y2);
+    linea.setAttribute("class", "esquema-linea-relacion");
+    esquemaSvg.appendChild(linea);
+  });
+}
+
+function crearCajaTabla(tabla, posicion) {
+  const caja = document.createElement("div");
+  caja.className = "caja-tabla";
+  caja.dataset.tabla = tabla.nombre;
+  caja.style.left = `${posicion.x}px`;
+  caja.style.top = `${posicion.y}px`;
+
+  const titulo = document.createElement("div");
+  titulo.className = "caja-tabla-titulo";
+  titulo.textContent = tabla.nombre;
+  caja.appendChild(titulo);
+
+  if (tabla.descripcion) {
+    const descripcion = document.createElement("div");
+    descripcion.className = "caja-tabla-descripcion";
+    descripcion.textContent = tabla.descripcion;
+    caja.appendChild(descripcion);
+  }
+
+  const listaColumnas = document.createElement("ul");
+  listaColumnas.className = "caja-tabla-columnas";
+  tabla.columnas.forEach((columna) => {
+    const li = document.createElement("li");
+    const nulo = columna.nullable ? "" : " NOT NULL";
+    li.innerHTML = `<span class="columna-nombre">${columna.nombre}</span> <span class="columna-tipo">${columna.tipo}${nulo}</span>`;
+    if (columna.descripcion) {
+      const descripcion = document.createElement("div");
+      descripcion.className = "columna-descripcion";
+      descripcion.textContent = columna.descripcion;
+      li.appendChild(descripcion);
+    }
+    listaColumnas.appendChild(li);
+  });
+  caja.appendChild(listaColumnas);
+
+  return caja;
+}
+
+async function mostrarEsquema() {
+  const esquema = await invoke("esquema_actual");
+  const posiciones = POSICIONES_TABLAS[empresaActual] || {};
+
+  posicionesActuales = {};
+  esquemaLienzo.querySelectorAll(".caja-tabla").forEach((el) => el.remove());
+
+  esquema.tablas.forEach((tabla, indice) => {
+    const posicion = posiciones[tabla.nombre] || { x: 40 + indice * 260, y: 40 };
+    posicionesActuales[tabla.nombre] = { ...posicion };
+    esquemaLienzo.appendChild(crearCajaTabla(tabla, posicion));
+  });
+
+  dibujarRelaciones(esquema.relaciones);
+  esquemaOverlay.classList.remove("oculto");
+}
+
 window.addEventListener("DOMContentLoaded", async () => {
   sqlInput = document.querySelector("#sql-input");
   statusMsg = document.querySelector("#status-msg");
@@ -449,6 +554,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   scoringOverlay = document.querySelector("#scoring-overlay");
   scoringAscenso = document.querySelector("#scoring-ascenso");
   agenciaOverlay = document.querySelector("#agencia-overlay");
+  esquemaOverlay = document.querySelector("#esquema-overlay");
+  esquemaLienzo = document.querySelector("#esquema-lienzo");
+  esquemaSvg = document.querySelector("#esquema-svg");
   pausaOverlay = document.querySelector("#pausa-overlay");
   pantallaMenu = document.querySelector("#pantalla-menu");
   appShell = document.querySelector("#app-shell");
@@ -517,6 +625,14 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   document.querySelector("#tab-logros").addEventListener("click", () => {
     setStatus("Próximamente.", "");
+  });
+
+  document.querySelector("#btn-ver-esquema").addEventListener("click", mostrarEsquema);
+
+  document.querySelector("#tab-base-datos").addEventListener("click", mostrarEsquema);
+
+  document.querySelector("#btn-cerrar-esquema").addEventListener("click", () => {
+    esquemaOverlay.classList.add("oculto");
   });
 
   document.querySelector("#btn-guardar-pausa").addEventListener("click", () => {
