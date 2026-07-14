@@ -48,7 +48,7 @@ pub async fn evaluar_entrega(
     let violaciones = practices::analizar(sql_jugador);
     let puntaje_practicas = practices::puntaje(&violaciones);
 
-    let comentario_mentor = mentor::comentario(&violaciones, puntaje_velocidad);
+    let comentario_mentor = mentor::comentario(correcta, &violaciones, puntaje_velocidad);
 
     Ok(Evaluacion {
         correcta,
@@ -107,6 +107,10 @@ mod tests {
 
         assert!(!evaluacion.correcta);
         assert_eq!(evaluacion.puntaje_correctitud, 0.0);
+        assert_eq!(
+            evaluacion.comentario_mentor, None,
+            "el Mentor nunca debe sugerir que el resultado fue correcto en una entrega fallida"
+        );
 
         pool.close().await;
         pg.stop().await.expect("Postgres debe detenerse limpiamente");

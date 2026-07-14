@@ -8,7 +8,7 @@ const UMBRAL_VELOCIDAD_BAJA: f64 = 70.0;
 /// ninguna regla falló pero el plan es notablemente costoso, se muestra un
 /// comentario sobre el plan. Nunca dos comentarios a la vez (Etapa 11-E: "no
 /// en cada ticket, se volvería ruido").
-pub fn comentario(violaciones: &[Regla], puntaje_velocidad: f64) -> Option<&'static str> {
+pub fn comentario(correcta: bool, violaciones: &[Regla], puntaje_velocidad: f64) -> Option<&'static str> {
     for regla in violaciones {
         let texto = match regla {
             Regla::SelectStar => {
@@ -28,7 +28,9 @@ pub fn comentario(violaciones: &[Regla], puntaje_velocidad: f64) -> Option<&'sta
         return Some(texto);
     }
 
-    if puntaje_velocidad < UMBRAL_VELOCIDAD_BAJA {
+    // Este mensaje afirma explícitamente "encontró la respuesta correcta" — nunca debe
+    // mostrarse si la entrega en realidad falló la validación de correctitud.
+    if correcta && puntaje_velocidad < UMBRAL_VELOCIDAD_BAJA {
         return Some(
             "Tu query encontró la respuesta correcta, pero el plan de ejecución cuesta más \
              de lo necesario. Vale la pena revisar si hay una forma más directa de llegar al \
@@ -45,25 +47,34 @@ mod tests {
 
     #[test]
     fn muestra_comentario_de_la_primera_regla_violada() {
-        assert!(comentario(&[Regla::SelectStar], 100.0)
+        assert!(comentario(true, &[Regla::SelectStar], 100.0)
             .unwrap()
             .contains("SELECT *"));
     }
 
     #[test]
     fn prioriza_la_primera_regla_sobre_las_siguientes() {
-        assert!(comentario(&[Regla::JoinSinCondicion, Regla::AliasFaltante], 100.0)
+        assert!(comentario(true, &[Regla::JoinSinCondicion, Regla::AliasFaltante], 100.0)
             .unwrap()
             .contains("JOIN"));
     }
 
     #[test]
     fn muestra_comentario_de_velocidad_si_no_hay_reglas_violadas_pero_el_plan_es_costoso() {
-        assert!(comentario(&[], 40.0).is_some());
+        assert!(comentario(true, &[], 40.0).is_some());
     }
 
     #[test]
     fn no_hay_comentario_si_todo_esta_bien() {
-        assert_eq!(comentario(&[], 100.0), None);
+        assert_eq!(comentario(true, &[], 100.0), None);
+    }
+
+    #[test]
+    fn no_muestra_comentario_de_velocidad_si_la_entrega_es_incorrecta() {
+        assert_eq!(
+            comentario(false, &[], 40.0),
+            None,
+            "no debe afirmar 'encontró la respuesta correcta' cuando en realidad falló"
+        );
     }
 }
