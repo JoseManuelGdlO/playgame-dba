@@ -18,6 +18,14 @@ const FACTOR_PENALIZACION_ESCALAMIENTO: f64 = 2.0;
 pub struct EstadoTurno {
     pub presupuesto_restante: u32,
     pub pendientes: Vec<Ticket>,
+    /// Cuántos intentos incorrectos lleva cada ticket pendiente en este turno
+    /// (Plan 17) — nunca se manda al frontend (el conteo de intentos
+    /// restantes que ve el jugador viene en la respuesta de `resolver_ticket`,
+    /// no de aquí). Se limpia cuando el ticket se resuelve de verdad (acierto
+    /// o intentos agotados) para que un id de ticket que reaparezca en un
+    /// turno futuro empiece en cero.
+    #[serde(skip)]
+    pub intentos_usados: std::collections::HashMap<String, u32>,
 }
 
 /// Un ticket escalado al cerrar el turno, y cuánta reputación costó.
@@ -51,6 +59,7 @@ impl EstadoTurno {
             EstadoTurno {
                 presupuesto_restante: PRESUPUESTO_POR_TURNO,
                 pendientes,
+                intentos_usados: std::collections::HashMap::new(),
             },
             indice,
         )
@@ -69,6 +78,30 @@ impl EstadoTurno {
         let ticket = self.pendientes.remove(posicion);
         self.presupuesto_restante = self.presupuesto_restante.saturating_sub(ticket.costo_tiempo);
         Some(ticket)
+    }
+
+    /// Cuenta un intento incorrecto de `id` y devuelve el nuevo total
+    /// (Plan 17) — 1 en el primer registro de ese ticket en este turno.
+    pub fn registrar_intento(&mut self, id: &str) -> u32 {
+        let contador = self.intentos_usados.entry(id.to_string()).or_insert(0);
+        *contador += 1;
+        *contador
+    }
+
+    /// Olvida el conteo de intentos de `id` (Plan 17) — se llama cuando el
+    /// ticket se resuelve de verdad (acierto o intentos agotados), para que
+    /// no quede un conteo obsoleto si ese id reapareciera en un turno futuro.
+    pub fn limpiar_intentos(&mut self, id: &str) {
+        self.intentos_usados.remove(id);
+    }
+
+    /// Deshace un `resolver()` (Plan 17): reembolsa el costo de tiempo del
+    /// ticket al presupuesto y lo reinserta en `pendientes` — usado cuando un
+    /// intento falla pero todavía quedan reintentos disponibles, para que el
+    /// ticket siga abierto sin haber costado nada de tiempo ni de pago.
+    pub fn reintentar(&mut self, ticket: Ticket) {
+        self.presupuesto_restante = self.presupuesto_restante.saturating_add(ticket.costo_tiempo);
+        self.pendientes.push(ticket);
     }
 
     /// Etapa 11-A: ¿ya no queda presupuesto para ningún ticket pendiente?
@@ -176,6 +209,50 @@ mod tests {
 
         assert!(turno.resolver("no_existe").is_none());
         assert_eq!(turno.pendientes.len(), 3, "no debe alterar el lote si el id no está pendiente");
+    }
+
+    #[test]
+    fn reintentar_reembolsa_el_tiempo_y_reinserta_el_ticket() {
+        let catalogo = catalogo_de_prueba();
+        let (mut turno, _) = EstadoTurno::nuevo(&catalogo, 0);
+
+        let resuelto = turno.resolver("t2").expect("t2 debe estar pendiente");
+        assert_eq!(turno.presupuesto_restante, 70, "resolver ya descontó el costo de t2 (30)");
+
+        turno.reintentar(resuelto);
+
+        assert_eq!(turno.presupuesto_restante, 100, "reintentar debe reembolsar el costo de tiempo");
+        assert_eq!(
+            turno.pendientes.iter().map(|t| t.id).collect::<Vec<_>>(),
+            vec!["t1", "t3", "t2"],
+            "el ticket reintentado se reinserta al final de pendientes"
+        );
+    }
+
+    #[test]
+    fn registrar_intento_incrementa_y_devuelve_el_conteo_por_ticket() {
+        let catalogo = catalogo_de_prueba();
+        let (mut turno, _) = EstadoTurno::nuevo(&catalogo, 0);
+
+        assert_eq!(turno.registrar_intento("t1"), 1);
+        assert_eq!(turno.registrar_intento("t1"), 2);
+        assert_eq!(turno.registrar_intento("t2"), 1, "el conteo es independiente por ticket");
+    }
+
+    #[test]
+    fn limpiar_intentos_borra_el_conteo_de_ese_ticket() {
+        let catalogo = catalogo_de_prueba();
+        let (mut turno, _) = EstadoTurno::nuevo(&catalogo, 0);
+
+        turno.registrar_intento("t1");
+        turno.registrar_intento("t1");
+        turno.limpiar_intentos("t1");
+
+        assert_eq!(
+            turno.registrar_intento("t1"),
+            1,
+            "tras limpiar, el siguiente registro debe volver a empezar en 1"
+        );
     }
 
     #[test]

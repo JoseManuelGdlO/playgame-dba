@@ -585,6 +585,7 @@ async fn cargar_partida(
             actual: turno::EstadoTurno {
                 presupuesto_restante: partida.presupuesto_restante,
                 pendientes,
+                intentos_usados: std::collections::HashMap::new(),
             },
             fase: partida.fase,
             empresa: partida.empresa,
