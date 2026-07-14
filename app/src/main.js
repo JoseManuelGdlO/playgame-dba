@@ -56,7 +56,8 @@ const PRIORIDAD_INFO = {
 
 const DURACION_TRANSICION_MS = 250;
 
-const TICKET_TUTORIAL_ID = "hospital_reporte_pacientes_cardiologia";
+const TICKET_TUTORIAL_ID_PASO1 = "hospital_reporte_departamentos";
+const TICKET_TUTORIAL_ID_PASO2 = "hospital_reporte_pacientes_cardiologia";
 
 function alternarPantalla(el, mostrar) {
   if (mostrar) {
@@ -376,8 +377,15 @@ async function iniciarPartida() {
   pintarHubDesdeEstadoJuego(estadoJuego);
   await cargarPerks();
   setStatus("Partida nueva iniciada.", "ok");
-  const primerTicket = estadoJuego.pendientes && estadoJuego.pendientes[0];
-  if (primerTicket && primerTicket.id === TICKET_TUTORIAL_ID) {
+  const pendientes = estadoJuego.pendientes || [];
+  const primerTicket = pendientes[0];
+  const segundoTicket = pendientes[1];
+  const esInicioDeTutorial =
+    primerTicket &&
+    primerTicket.id === TICKET_TUTORIAL_ID_PASO1 &&
+    segundoTicket &&
+    segundoTicket.id === TICKET_TUTORIAL_ID_PASO2;
+  if (esInicioDeTutorial) {
     btnSaltarTutorial.classList.remove("oculto");
     iniciarTutorial(RETRATOS["El Mentor"], () => {
       btnSaltarTutorial.classList.add("oculto");
