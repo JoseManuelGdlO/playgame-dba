@@ -603,6 +603,12 @@ fn catalogo_perks(jugador: tauri::State<'_, Jugador>) -> PerksView {
 }
 
 #[tauri::command]
+async fn esquema_actual(state: tauri::State<'_, AppState>) -> Result<db::EsquemaView, String> {
+    let pool = state.0.lock().unwrap().clone();
+    db::obtener_esquema(&pool).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn desbloquear_perk(jugador: tauri::State<'_, Jugador>, id: String) -> Result<PerksView, String> {
     let mut estado = jugador.0.lock().unwrap();
     estado.desbloquear_perk(perks::catalogo(), &id)?;
@@ -640,7 +646,8 @@ pub fn run() {
             catalogo_perks,
             desbloquear_perk,
             equipar_perk,
-            desequipar_perk
+            desequipar_perk,
+            esquema_actual
         ])
         .setup(|app| {
             let handle = app.handle().clone();

@@ -114,6 +114,111 @@ pub async fn run_query(pool: &PgPool, sql: &str) -> anyhow::Result<QueryResult> 
     Ok(QueryResult { rows })
 }
 
+#[derive(serde::Serialize)]
+pub struct ColumnaEsquema {
+    pub nombre: String,
+    pub tipo: String,
+    pub nullable: bool,
+    pub descripcion: Option<String>,
+}
+
+#[derive(serde::Serialize)]
+pub struct TablaEsquema {
+    pub nombre: String,
+    pub descripcion: Option<String>,
+    pub columnas: Vec<ColumnaEsquema>,
+}
+
+#[derive(serde::Serialize)]
+pub struct RelacionEsquema {
+    pub tabla_origen: String,
+    pub columna_origen: String,
+    pub tabla_destino: String,
+    pub columna_destino: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct EsquemaView {
+    pub tablas: Vec<TablaEsquema>,
+    pub relaciones: Vec<RelacionEsquema>,
+}
+
+/// Introspección en vivo (Etapa 16/Plan 14): tablas, columnas y relaciones
+/// reales de la base de datos activa, incluyendo los comentarios humanos que
+/// cada esquema ya trae vía `COMMENT ON TABLE`/`COMMENT ON COLUMN` — no se
+/// inventa ni duplica ningún texto, se lee directo de Postgres.
+pub async fn obtener_esquema(pool: &PgPool) -> anyhow::Result<EsquemaView> {
+    let filas_tablas = sqlx::query(
+        "SELECT c.relname AS tabla, obj_description(c.oid, 'pg_class') AS descripcion
+         FROM pg_class c
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE c.relkind = 'r' AND n.nspname = 'public'
+         ORDER BY c.relname",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let mut tablas: Vec<TablaEsquema> = Vec::new();
+    for fila in &filas_tablas {
+        let nombre: String = fila.try_get("tabla")?;
+        let descripcion: Option<String> = fila.try_get("descripcion")?;
+        tablas.push(TablaEsquema { nombre, descripcion, columnas: Vec::new() });
+    }
+
+    let filas_columnas = sqlx::query(
+        "SELECT c.relname AS tabla, a.attname AS columna,
+                format_type(a.atttypid, a.atttypmod) AS tipo,
+                NOT a.attnotnull AS nullable,
+                col_description(c.oid, a.attnum) AS descripcion
+         FROM pg_attribute a
+         JOIN pg_class c ON c.oid = a.attrelid
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE c.relkind = 'r' AND n.nspname = 'public' AND a.attnum > 0 AND NOT a.attisdropped
+         ORDER BY c.relname, a.attnum",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    for fila in &filas_columnas {
+        let tabla: String = fila.try_get("tabla")?;
+        let columna = ColumnaEsquema {
+            nombre: fila.try_get("columna")?,
+            tipo: fila.try_get("tipo")?,
+            nullable: fila.try_get("nullable")?,
+            descripcion: fila.try_get("descripcion")?,
+        };
+        if let Some(t) = tablas.iter_mut().find(|t| t.nombre == tabla) {
+            t.columnas.push(columna);
+        }
+    }
+
+    let filas_relaciones = sqlx::query(
+        "SELECT tc.table_name AS tabla_origen, kcu.column_name AS columna_origen,
+                ccu.table_name AS tabla_destino, ccu.column_name AS columna_destino
+         FROM information_schema.table_constraints tc
+         JOIN information_schema.key_column_usage kcu
+             ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+         JOIN information_schema.constraint_column_usage ccu
+             ON tc.constraint_name = ccu.constraint_name AND tc.table_schema = ccu.table_schema
+         WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = 'public'
+         ORDER BY tc.table_name, kcu.column_name",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let mut relaciones: Vec<RelacionEsquema> = Vec::new();
+    for fila in &filas_relaciones {
+        relaciones.push(RelacionEsquema {
+            tabla_origen: fila.try_get("tabla_origen")?,
+            columna_origen: fila.try_get("columna_origen")?,
+            tabla_destino: fila.try_get("tabla_destino")?,
+            columna_destino: fila.try_get("columna_destino")?,
+        });
+    }
+
+    Ok(EsquemaView { tablas, relaciones })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -137,6 +242,81 @@ mod tests {
 
         hospital.close().await;
         postafeta.close().await;
+        pg.stop().await.expect("Postgres debe detenerse limpiamente");
+    }
+
+    #[tokio::test]
+    async fn obtener_esquema_lee_tablas_columnas_y_relaciones_reales() {
+        let pg = init_embedded_postgres().await.expect("Postgres embebido debe arrancar");
+        let pool = load_company(&pg, Company::HospitalArcangel)
+            .await
+            .expect("Hospital Arcángel debe cargar");
+
+        let esquema = obtener_esquema(&pool).await.expect("la introspección debe funcionar");
+
+        assert_eq!(esquema.tablas.len(), 6, "Hospital Arcángel tiene 6 tablas");
+
+        let pacientes = esquema
+            .tablas
+            .iter()
+            .find(|t| t.nombre == "pacientes")
+            .expect("la tabla pacientes debe aparecer");
+        assert_eq!(
+            pacientes.descripcion.as_deref(),
+            Some("Historial de admisiones. fecha_alta queda NULL mientras el paciente sigue internado.")
+        );
+
+        let columna_diagnostico = pacientes
+            .columnas
+            .iter()
+            .find(|c| c.nombre == "diagnostico")
+            .expect("la columna diagnostico debe aparecer");
+        assert_eq!(columna_diagnostico.tipo, "text");
+        assert!(!columna_diagnostico.nullable);
+        assert_eq!(
+            columna_diagnostico.descripcion.as_deref(),
+            Some("Motivo de ingreso redactado por el residente de guardia, casi siempre a las 3am.")
+        );
+
+        let columna_fecha_alta = pacientes
+            .columnas
+            .iter()
+            .find(|c| c.nombre == "fecha_alta")
+            .expect("la columna fecha_alta debe aparecer");
+        assert!(columna_fecha_alta.nullable, "fecha_alta no tiene NOT NULL en el esquema");
+
+        let relacion_paciente_departamento = esquema.relaciones.iter().any(|r| {
+            r.tabla_origen == "pacientes"
+                && r.columna_origen == "departamento_id"
+                && r.tabla_destino == "departamentos"
+                && r.columna_destino == "id"
+        });
+        assert!(relacion_paciente_departamento, "pacientes.departamento_id debe referenciar departamentos.id");
+
+        pool.close().await;
+        pg.stop().await.expect("Postgres debe detenerse limpiamente");
+    }
+
+    #[tokio::test]
+    async fn obtener_esquema_soporta_multiples_fks_en_una_tabla() {
+        let pg = init_embedded_postgres().await.expect("Postgres embebido debe arrancar");
+        let pool = load_company(&pg, Company::Postafeta)
+            .await
+            .expect("Postafeta debe cargar");
+
+        let esquema = obtener_esquema(&pool).await.expect("la introspección debe funcionar");
+
+        assert_eq!(esquema.tablas.len(), 5, "Postafeta tiene 5 tablas");
+
+        let relaciones_paquetes: Vec<_> = esquema.relaciones.iter().filter(|r| r.tabla_origen == "paquetes").collect();
+        assert_eq!(relaciones_paquetes.len(), 4, "paquetes referencia clientes, sucursales (x2) y empleados");
+
+        let hacia_clientes = relaciones_paquetes
+            .iter()
+            .any(|r| r.columna_origen == "cliente_id" && r.tabla_destino == "clientes");
+        assert!(hacia_clientes);
+
+        pool.close().await;
         pg.stop().await.expect("Postgres debe detenerse limpiamente");
     }
 }
