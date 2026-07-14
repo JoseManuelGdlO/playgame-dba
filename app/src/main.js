@@ -1,4 +1,4 @@
-import { sfxClick, sfxTecleo, sfxCierreDia, iniciarAmbiente, alternarMusica, alternarEfectos } from "./audio.js";
+import { sfxClick, sfxTecleo, sfxCierreDia, sfxTick, sfxExito, sfxError, sfxAscenso, iniciarAmbiente, alternarMusica, alternarEfectos } from "./audio.js";
 
 const { invoke } = window.__TAURI__.core;
 
@@ -9,6 +9,7 @@ let scoringOverlay, scoringAscenso, agenciaOverlay;
 let pantallaMenu, appShell, pantallaHub, pantallaConsola, btnCargarPartida;
 let ticketRetrato, consolaTitulo;
 let btnMuteMusica, btnMuteEfectos;
+let btnCerrarScoring;
 
 const RETRATOS = {
   generico: `<svg viewBox="0 0 8 8"><rect width="8" height="8" fill="#4a4a3a"/><rect x="2" y="1" width="4" height="3" fill="#8a8266"/><rect x="1" y="4" width="6" height="3" fill="#6b6b52"/><rect x="3" y="2" width="1" height="1" fill="#2a2a1f"/><rect x="5" y="2" width="1" height="1" fill="#2a2a1f"/></svg>`,
@@ -227,18 +228,59 @@ function animarNumero(el, valorFinal, decimales) {
   requestAnimationFrame(paso);
 }
 
-function mostrarScoring(score) {
-  document.querySelector("#scoring-titulo").textContent = score.pass ? "✅ Resuelto" : "❌ Incorrecto";
-  animarNumero(document.querySelector("#scoring-correctitud"), score.puntaje_correctitud, 0);
-  animarNumero(document.querySelector("#scoring-velocidad"), score.puntaje_velocidad, 0);
-  animarNumero(document.querySelector("#scoring-practicas"), score.puntaje_practicas, 0);
-  animarNumero(document.querySelector("#scoring-dinero"), score.dinero_ganado, 0);
-  animarNumero(document.querySelector("#scoring-reputacion"), score.reputacion_ganada, 1);
-  document.querySelector("#scoring-mentor").textContent = score.comentario_mentor || "";
-  scoringAscenso.textContent = score.ascendio
-    ? `¡Ascendiste a ${NOMBRE_RANGO[score.rango_actual] || score.rango_actual}! +1 slot de perk. Nuevos tickets disponibles.`
-    : "";
+const DURACION_LINEA_SCORING_MS = 350;
+
+function esperar(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function mostrarScoring(score) {
+  const tituloEl = document.querySelector("#scoring-titulo");
+  const mentorEl = document.querySelector("#scoring-mentor");
+
+  btnCerrarScoring.disabled = true;
+  tituloEl.textContent = "";
+  tituloEl.className = "";
+  mentorEl.textContent = "";
+  scoringAscenso.textContent = "";
+
+  const lineas = [
+    { span: document.querySelector("#scoring-correctitud"), valor: score.puntaje_correctitud, decimales: 0 },
+    { span: document.querySelector("#scoring-velocidad"), valor: score.puntaje_velocidad, decimales: 0 },
+    { span: document.querySelector("#scoring-practicas"), valor: score.puntaje_practicas, decimales: 0 },
+    { span: document.querySelector("#scoring-dinero"), valor: score.dinero_ganado, decimales: 0 },
+    { span: document.querySelector("#scoring-reputacion"), valor: score.reputacion_ganada, decimales: 1 },
+  ].map((linea) => ({ ...linea, fila: linea.span.closest("p") }));
+
+  for (const linea of lineas) {
+    linea.fila.classList.add("linea-oculta");
+  }
+
   scoringOverlay.classList.remove("oculto");
+
+  for (const linea of lineas) {
+    linea.fila.classList.remove("linea-oculta");
+    animarNumero(linea.span, linea.valor, linea.decimales);
+    sfxTick();
+    await esperar(DURACION_LINEA_SCORING_MS);
+  }
+
+  mentorEl.textContent = score.comentario_mentor || "";
+
+  tituloEl.textContent = score.pass ? "✅ Resuelto" : "❌ Incorrecto";
+  tituloEl.className = score.pass ? "pulso" : "shake";
+  if (score.pass) {
+    sfxExito();
+  } else {
+    sfxError();
+  }
+
+  if (score.ascendio) {
+    scoringAscenso.textContent = `¡Ascendiste a ${NOMBRE_RANGO[score.rango_actual] || score.rango_actual}! +1 slot de perk. Nuevos tickets disponibles.`;
+    sfxAscenso();
+  }
+
+  btnCerrarScoring.disabled = false;
 }
 
 async function submitTicket() {
@@ -331,13 +373,14 @@ window.addEventListener("DOMContentLoaded", async () => {
   consolaTitulo = document.querySelector("#consola-titulo");
   btnMuteMusica = document.querySelector("#btn-mute-musica");
   btnMuteEfectos = document.querySelector("#btn-mute-efectos");
+  btnCerrarScoring = document.querySelector("#btn-cerrar-scoring");
 
   await mostrarMenu();
 
   document.querySelector("#btn-play").addEventListener("click", runQuery);
   document.querySelector("#btn-submit").addEventListener("click", submitTicket);
   document.querySelector("#btn-cerrar-dia").addEventListener("click", cerrarDia);
-  document.querySelector("#btn-cerrar-scoring").addEventListener("click", () => {
+  btnCerrarScoring.addEventListener("click", () => {
     scoringOverlay.classList.add("oculto");
     mostrarPantalla("hub");
   });

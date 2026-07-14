@@ -401,6 +401,69 @@ tr:nth-child(even) td {
 .scoring-panel p {
   margin: 0.4rem 0;
   font-size: 1.1rem;
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+
+#scoring-overlay .ventana-terminal {
+  animation: entrada-overlay 200ms ease;
+}
+
+@keyframes entrada-overlay {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.scoring-panel .linea-oculta {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+@keyframes pulso-exito {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.08);
+    filter: brightness(1.3);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+@keyframes shake-error {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+#scoring-titulo.pulso {
+  animation: pulso-exito 400ms ease;
+}
+
+#scoring-titulo.shake {
+  animation: shake-error 400ms ease;
 }
 
 .control-audio {
