@@ -1,4 +1,14 @@
 import { sfxClick, sfxTecleo, sfxCierreDia, sfxTick, sfxExito, sfxError, sfxAscenso, iniciarAmbiente, alternarMusica, alternarEfectos } from "./audio.js";
+import {
+  iniciarTutorial,
+  tutorialActivo,
+  saltarTutorial,
+  notificarClicPrimerTicket,
+  notificarSqlCambiado,
+  notificarClicPlay,
+  notificarClicEnviar,
+  notificarCierreScoring,
+} from "./tutorial.js";
 
 const { invoke } = window.__TAURI__.core;
 
@@ -11,6 +21,7 @@ let pausaOverlay;
 let ticketRetrato, consolaTitulo;
 let btnMuteMusica, btnMuteEfectos;
 let btnCerrarScoring;
+let btnSaltarTutorial;
 let headerAppShell, dineroHubEl, reputacionHubEl;
 let rangoPerfilEl, progresoRangoActualTextoEl, progresoRangoSiguienteEl;
 let tooltipGlobal;
@@ -278,6 +289,7 @@ function seleccionarTicket(ticket) {
   ticketRetrato.innerHTML = retratoParaSolicitante(ticket.solicitante);
   consolaTitulo.textContent = `query-path — ${ticket.id}`;
   mostrarPantalla("consola");
+  notificarClicPrimerTicket();
 }
 
 function renderBandeja(estadoTurno) {
@@ -294,6 +306,9 @@ function renderBandeja(estadoTurno) {
     const li = document.createElement("li");
     li.className = "papel papel-entrando papel-ticket";
     li.style.animationDelay = `${indice * 60}ms`;
+    if (indice === 0) {
+      li.dataset.primerTicket = "true";
+    }
 
     const clip = document.createElement("div");
     clip.className = "clip-papel";
@@ -359,6 +374,10 @@ async function iniciarPartida() {
   pintarHubDesdeEstadoJuego(estadoJuego);
   await cargarPerks();
   setStatus("Partida nueva iniciada.", "ok");
+  btnSaltarTutorial.classList.remove("oculto");
+  iniciarTutorial(RETRATOS["El Mentor"], () => {
+    btnSaltarTutorial.classList.add("oculto");
+  });
 }
 
 async function cargarPartida() {
@@ -656,6 +675,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   btnMuteMusica = document.querySelector("#btn-mute-musica");
   btnMuteEfectos = document.querySelector("#btn-mute-efectos");
   btnCerrarScoring = document.querySelector("#btn-cerrar-scoring");
+  btnSaltarTutorial = document.querySelector("#btn-saltar-tutorial");
   headerAppShell = document.querySelector("#header-app-shell");
   dineroHubEl = document.querySelector("#dinero-hub");
   reputacionHubEl = document.querySelector("#reputacion-hub");
@@ -668,13 +688,20 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   await mostrarMenu();
 
-  document.querySelector("#btn-play").addEventListener("click", runQuery);
+  document.querySelector("#btn-play").addEventListener("click", () => {
+    runQuery();
+    notificarClicPlay();
+  });
   document.querySelector("#btn-ejecutar-todas").addEventListener("click", runAllQueries);
-  document.querySelector("#btn-submit").addEventListener("click", submitTicket);
+  document.querySelector("#btn-submit").addEventListener("click", () => {
+    submitTicket();
+    notificarClicEnviar();
+  });
   document.querySelector("#btn-cerrar-dia").addEventListener("click", cerrarDia);
   btnCerrarScoring.addEventListener("click", () => {
     scoringOverlay.classList.add("oculto");
     mostrarPantalla("hub");
+    notificarCierreScoring();
   });
   document.querySelector("#btn-confirmar-agencia").addEventListener("click", confirmarTransicionAgencia);
   document.querySelector("#btn-iniciar-partida").addEventListener("click", iniciarPartida);
@@ -693,6 +720,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
 
   sqlInput.addEventListener("keydown", () => sfxTecleo());
+  sqlInput.addEventListener("input", () => notificarSqlCambiado(sqlInput.value));
 
   btnMuteMusica.addEventListener("click", () => {
     const activa = alternarMusica();
@@ -702,6 +730,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   btnMuteEfectos.addEventListener("click", () => {
     const activos = alternarEfectos();
     btnMuteEfectos.textContent = activos ? "🔊" : "🔇";
+  });
+
+  btnSaltarTutorial.addEventListener("click", () => {
+    saltarTutorial();
+    btnSaltarTutorial.classList.add("oculto");
   });
 
   document.querySelector("#tab-dashboard").addEventListener("click", () => {
@@ -756,6 +789,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.addEventListener("keydown", (evento) => {
     if (evento.key !== "Escape") return;
     if (appShell.classList.contains("oculto")) return;
+    if (tutorialActivo()) return;
     const hayOverlayResultado = !scoringOverlay.classList.contains("oculto");
     const hayOverlayAgencia = !agenciaOverlay.classList.contains("oculto");
     if (hayOverlayResultado || hayOverlayAgencia) return;
