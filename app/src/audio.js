@@ -59,6 +59,11 @@ export function sfxTecleo() {
   tono(1200 * variacion, 30, "square", 0.04);
 }
 
+export function sfxBlip() {
+  const variacion = 0.85 + Math.random() * 0.5;
+  tono(300 * variacion, 45, "square", 0.05);
+}
+
 export function sfxTick() {
   tono(880, 80, "sine", 0.08);
 }
