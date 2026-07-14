@@ -302,8 +302,13 @@ struct PerkConEstado {
 }
 
 fn vista_perks(estado: &economia::EstadoJugador) -> Vec<PerkConEstado> {
-    perks::catalogo()
+    let mut visibles: Vec<PerkConEstado> = perks::catalogo()
         .iter()
+        .filter(|perk| {
+            let desbloqueado = estado.perks_desbloqueados.contains(&perk.id);
+            let equipado = estado.perks_equipados.contains(&perk.id);
+            perks::visible_en_hub(perk, estado.rango, estado.reputacion, desbloqueado, equipado)
+        })
         .map(|perk| PerkConEstado {
             id: perk.id,
             nombre: perk.nombre,
@@ -314,7 +319,16 @@ fn vista_perks(estado: &economia::EstadoJugador) -> Vec<PerkConEstado> {
             desbloqueado: estado.perks_desbloqueados.contains(&perk.id),
             equipado: estado.perks_equipados.contains(&perk.id),
         })
-        .collect()
+        .collect();
+
+    // Mejores (mayor rep requerida) al final: se revelan hacia abajo al avanzar.
+    visibles.sort_by(|a, b| {
+        a.reputacion_minima
+            .partial_cmp(&b.reputacion_minima)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.nombre.cmp(b.nombre))
+    });
+    visibles
 }
 
 /// Vista de la lista de perks junto con el límite de slots del rango actual
@@ -324,12 +338,17 @@ fn vista_perks(estado: &economia::EstadoJugador) -> Vec<PerkConEstado> {
 struct PerksView {
     perks: Vec<PerkConEstado>,
     max_slots: usize,
+    /// Cuántos perks del catálogo aún no se revelan (para el teaser del hub).
+    ocultos: usize,
 }
 
 fn vista_perks_con_slots(estado: &economia::EstadoJugador) -> PerksView {
+    let perks = vista_perks(estado);
+    let ocultos = perks::catalogo().len().saturating_sub(perks.len());
     PerksView {
-        perks: vista_perks(estado),
+        perks,
         max_slots: estado.max_slots(),
+        ocultos,
     }
 }
 
@@ -361,7 +380,7 @@ fn rango_actual(jugador: tauri::State<'_, Jugador>) -> tickets::Rango {
 #[tauri::command]
 async fn run_query(state: tauri::State<'_, AppState>, sql: String) -> Result<db::QueryResult, String> {
     let pool = state.0.lock().unwrap().clone();
-    db::run_query(&pool, &sql).await.map_err(|e| e.to_string())
+    db::run_query(&pool, &sql).await.map_err(|e| db::mensaje_error_para_jugador(&e.to_string()))
 }
 
 #[tauri::command]
@@ -406,7 +425,7 @@ async fn resolver_ticket(
             // error y al reintentar "ya no está pendiente".
             let mut manejado = turno_state.0.lock().unwrap();
             manejado.actual.reintentar(ticket);
-            return Err(format!("No se pudo evaluar tu query: {error}"));
+            return Err(db::mensaje_error_para_jugador(&error.to_string()));
         }
     };
 
@@ -436,7 +455,10 @@ async fn resolver_ticket(
                 puede_ascender: estado.puede_ascender(),
                 ascendio: false,
                 rango_actual: estado.rango,
-                mensaje: format!("No es correcto todavía. Te quedan {} intento(s).", limite - usados),
+                mensaje: format!(
+                    "Aún no coincide con lo que pide el ticket. Relee la solicitud: el filtro y el orden importan. Te quedan {} intento(s).",
+                    limite - usados
+                ),
                 intentos_restantes: Some(limite - usados),
             });
         }
@@ -472,7 +494,7 @@ async fn resolver_ticket(
         mensaje: if evaluacion.correcta {
             "Ticket resuelto. Contabilidad procesará tu pago... eventualmente.".to_string()
         } else {
-            "El resultado no coincide con lo que pidió la solicitud. Revisa tu consulta.".to_string()
+            "El resultado no es el que pide la solicitud. Mira otra vez el filtro y el orden (A→Z, sin DESC si no te lo piden).".to_string()
         },
         intentos_restantes: None,
     })

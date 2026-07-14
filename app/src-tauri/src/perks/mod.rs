@@ -1,4 +1,4 @@
-use crate::tickets::Arquetipo;
+use crate::tickets::{Arquetipo, Rango};
 
 /// Un perk del sistema RPG (Etapa 13): nombre y descripción siempre en
 /// lenguaje de jugador, nunca en jerga técnica SQL — la maestría por
@@ -155,6 +155,28 @@ pub fn buscar(id: &str) -> Option<&'static Perk> {
     CATALOGO.iter().find(|p| p.id == id)
 }
 
+/// Techo de `reputacion_minima` que el hub puede mostrar según rango/rep.
+/// Becario solo ve perks de arranque; Auxiliar va abriendo mejores a medida
+/// que sube la reputación (con margen de +2 para ver el próximo objetivo).
+pub fn techo_revelacion(rango: Rango, reputacion: f64) -> f64 {
+    match rango {
+        Rango::Becario => 4.0,
+        Rango::AuxiliarDeSistemas => (reputacion + 2.0).max(5.0),
+    }
+}
+
+/// Un perk aparece en el hub si ya lo tienes o si su requisito de
+/// reputación entra bajo el techo de revelación del progreso actual.
+pub fn visible_en_hub(
+    perk: &Perk,
+    rango: Rango,
+    reputacion: f64,
+    desbloqueado: bool,
+    equipado: bool,
+) -> bool {
+    desbloqueado || equipado || perk.reputacion_minima <= techo_revelacion(rango, reputacion)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -206,5 +228,40 @@ mod tests {
         let perk = buscar("segunda_opinion").expect("segunda_opinion debe existir");
         assert_eq!(perk.categoria, Categoria::ManosRapidas);
         assert_eq!(perk.efecto, Efecto::BonoIntentos(2));
+    }
+
+    #[test]
+    fn becario_solo_revela_perks_de_arranque() {
+        let visibles: Vec<_> = catalogo()
+            .iter()
+            .filter(|p| visible_en_hub(p, Rango::Becario, 0.0, false, false))
+            .map(|p| p.id)
+            .collect();
+        assert!(visibles.contains(&"instinto"));
+        assert!(visibles.contains(&"cafe_cargado"));
+        assert!(visibles.contains(&"piloto_automatico"));
+        assert!(!visibles.contains(&"buena_fama"));
+        assert!(!visibles.contains(&"modo_turbo"));
+        assert_eq!(visibles.len(), 3);
+    }
+
+    #[test]
+    fn auxiliar_con_poca_rep_abre_hasta_umbral_5() {
+        let visibles: Vec<_> = catalogo()
+            .iter()
+            .filter(|p| visible_en_hub(p, Rango::AuxiliarDeSistemas, 2.5, false, false))
+            .map(|p| p.id)
+            .collect();
+        assert!(visibles.contains(&"buena_fama"));
+        assert!(visibles.contains(&"segunda_opinion"));
+        assert!(visibles.contains(&"rayos_x"));
+        assert!(!visibles.contains(&"modo_turbo"));
+        assert!(!visibles.contains(&"bono_bajo_la_mesa"));
+    }
+
+    #[test]
+    fn perk_ya_desbloqueado_sigue_visible_aunque_el_techo_sea_bajo() {
+        let turbo = buscar("modo_turbo").expect("modo_turbo");
+        assert!(visible_en_hub(turbo, Rango::Becario, 0.0, true, false));
     }
 }

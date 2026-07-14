@@ -149,7 +149,7 @@ pub(crate) fn mini_boss() -> Vec<Ticket> {
                 "SELECT tipo, COUNT(*) AS total\n\
                  FROM tratamientos\n\
                  GROUP BY tipo\n\
-                 -- completa el ORDER BY (más frecuente primero)\n"
+                 -- Orden: primero los que más salen; si empatan, por nombre A→Z\n"
                     .to_string(),
             ),
             requiere_orden: true,

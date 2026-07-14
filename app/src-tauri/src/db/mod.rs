@@ -222,6 +222,39 @@ fn renombrar_fila_anonima(fila: Value, nombres: &[String]) -> Value {
     Value::Object(renombrada)
 }
 
+/// Traduce errores crudos de Postgres/sqlx a un mensaje entendible para
+/// jugadores no técnicos. Nunca menciona números de línea internos del wrapper.
+pub fn mensaje_error_para_jugador(error: &str) -> String {
+    let e = error.to_lowercase();
+
+    if e.contains("al final de la entrada") || e.contains("end of input") {
+        return "Tu consulta parece incompleta. Revisa el final: ¿falta algo después de WHERE u ORDER BY? Si tienes líneas de comentario (-- …), bórralas cuando ya no las necesites y vuelve a probar.".to_string();
+    }
+    if e.contains("error de sintaxis") || e.contains("syntax error") {
+        return "Hay un fallo de escritura en la consulta (coma, comilla o palabra mal puesta). Léela despacio o abre la Wiki SQL.".to_string();
+    }
+    if e.contains("no existe la columna")
+        || e.contains("undefined column")
+        || (e.contains("does not exist") && e.contains("column"))
+    {
+        return "No encuentro esa columna. Abre «Ver esquema» y usa los nombres tal como aparecen ahí.".to_string();
+    }
+    if e.contains("no existe la relación")
+        || e.contains("undefined table")
+        || (e.contains("does not exist") && (e.contains("relation") || e.contains("tabla")))
+    {
+        return "No encuentro esa tabla. Abre «Ver esquema» y comprueba el nombre.".to_string();
+    }
+    if e.contains("operator does not exist") || e.contains("el operador no existe") {
+        return "Estás comparando dos cosas de distinto tipo (por ejemplo texto con número). Revisa el filtro.".to_string();
+    }
+    if e.contains("vacía") || e.contains("empty") {
+        return "La consulta está vacía. Escribe algo y vuelve a intentar.".to_string();
+    }
+
+    "No pude ejecutar esa consulta. Revisa tablas/columnas en el esquema y que no falte ningún trozo al final.".to_string()
+}
+
 #[derive(serde::Serialize)]
 pub struct ColumnaEsquema {
     pub nombre: String,
@@ -490,5 +523,20 @@ mod tests {
 
         pool.close().await;
         pg.stop().await.expect("Postgres debe detenerse limpiamente");
+    }
+
+    #[test]
+    fn mensaje_amigable_sin_lineas_internas_en_error_de_sintaxis() {
+        let crudo = "error returned from database: error de sintaxis al final de la entrada at line 1232";
+        let amable = mensaje_error_para_jugador(crudo);
+        assert!(!amable.contains("1232"));
+        assert!(!amable.to_lowercase().contains("returned from database"));
+        assert!(amable.to_lowercase().contains("incompleta") || amable.to_lowercase().contains("final"));
+    }
+
+    #[test]
+    fn mensaje_amigable_para_columna_inexistente() {
+        let amable = mensaje_error_para_jugador("error returned from database: no existe la columna «foo»");
+        assert!(amable.contains("columna") || amable.contains("esquema"));
     }
 }

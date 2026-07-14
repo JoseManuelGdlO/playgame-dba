@@ -26,7 +26,9 @@ import { mostrarDialogo, ocultarDialogo } from "./dialogo.js";
 const { invoke } = window.__TAURI__.core;
 
 let sqlInput, statusMsg, resultTable, dineroEl, reputacionEl, rangoEl;
-let listaPerks, perksEquipadosMsg;
+let listaPerks, perksEquipadosMsg, perkSlotsEl, perkSlotsLabelEl;
+let perkIdsPrevios = { desbloqueados: new Set(), equipados: new Set(), vistos: new Set() };
+let perksYaRenderizados = false;
 let presupuestoEl, listaTickets, ticketActivoInfo, bandejaTitulo;
 let scoringOverlay, scoringAscenso, agenciaOverlay;
 let pantallaMenu, appShell, pantallaHub, pantallaConsola, btnCargarPartida;
@@ -378,14 +380,14 @@ function leccionJoinPasos(retrato, alTerminar) {
   mostrarDialogo(
     retrato,
     "El Mentor",
-    "Este ticket necesita un JOIN: une filas de dos tablas con una clave en común. INNER JOIN (o solo JOIN) deja solo las filas que coinciden en ambas. LEFT JOIN conserva todas las de la izquierda aunque no haya pareja a la derecha.",
+    "Este ticket pide juntar información de dos tablas (pacientes y departamentos, por ejemplo). JOIN es la pieza que las une: «esta fila de aquí va con aquella de allá» porque comparten un número en común.",
     {
       permitir: ["#ticket-activo-info", "#sql-input"],
       alContinuar: () => {
         mostrarDialogo(
           retrato,
           "El Mentor",
-          "Ejemplo: FROM pacientes p JOIN departamentos d ON p.departamento_id = d.id. Si ambas tablas tienen una columna nombre, usa AS paciente / AS departamento para no pisarlas. Lee la solicitud, completa el filtro y el ORDER BY, prueba con ▶ Play y envía.",
+          "En la caja ya tienes casi todo escrito. Solo completa lo que pide la solicitud (filtro y orden). Si ves dos columnas llamadas «nombre», renómbralas con AS para no mezclarlas — por ejemplo AS paciente y AS departamento. Prueba con ▶ Play y envía cuando se vea bien.",
           {
             permitir: ["#sql-input", "#btn-play", "#btn-submit", "#btn-ver-wiki", "#btn-ver-esquema", "#wiki-overlay", "#esquema-overlay"],
             alContinuar: alTerminar,
@@ -401,17 +403,27 @@ function leccionAgregacionPasos(retrato, alTerminar) {
   mostrarDialogo(
     retrato,
     "El Mentor",
-    "Este ticket pide agregación: COUNT, SUM, AVG… con GROUP BY. GROUP BY agrupa filas que comparten un valor (por ejemplo el tipo) y la función calcula un número por grupo.",
+    "Aquí no quieres una lista de filas sueltas: quieres un resumen. «Agrupar» (GROUP BY) junta todo lo que sea del mismo tipo, y COUNT(*) cuenta cuántas hay en cada grupo.",
     {
       permitir: ["#ticket-activo-info", "#sql-input"],
       alContinuar: () => {
         mostrarDialogo(
           retrato,
           "El Mentor",
-          "Ejemplo: SELECT tipo, COUNT(*) AS total FROM tratamientos GROUP BY tipo ORDER BY total DESC. Todo lo que va en el SELECT que no sea agregación debe ir también en el GROUP BY. Completa la query del ticket, pruébala y envíala.",
+          "La base se ve así:\nSELECT tipo, COUNT(*) AS total\nFROM tratamientos\nGROUP BY tipo\nORDER BY total DESC, tipo;\n\nLee la solicitud con calma: te dice qué orden quiere el Auditor.",
           {
-            permitir: ["#sql-input", "#btn-play", "#btn-submit", "#btn-ver-wiki", "#btn-ver-esquema", "#wiki-overlay", "#esquema-overlay"],
-            alContinuar: alTerminar,
+            permitir: ["#ticket-activo-info", "#sql-input"],
+            alContinuar: () => {
+              mostrarDialogo(
+                retrato,
+                "El Mentor",
+                "Truco que casi siempre se olvida: si dos tipos salen empatados en cantidad, la solicitud pide ordenarlos por nombre (A → Z). Por eso al final va «, tipo». Si solo ordenas por el número, el Auditor puede marcarla mal aunque hayas contado bien. Prueba con ▶ Play y, cuando cuadre, envía.",
+                {
+                  permitir: ["#sql-input", "#btn-play", "#btn-submit", "#btn-ver-wiki", "#btn-ver-esquema", "#wiki-overlay", "#esquema-overlay"],
+                  alContinuar: alTerminar,
+                }
+              );
+            },
           }
         );
       },
@@ -424,27 +436,26 @@ const WIKI_ARTICULOS = [
     id: "select",
     titulo: "SELECT",
     html: `
-      <h3>SELECT — pedir columnas</h3>
-      <p>Lee filas de una tabla. Eliges qué columnas mostrar y de qué tabla.</p>
+      <h3>SELECT — ¿qué quiero ver?</h3>
+      <p>Es como pedir columnas de una hoja de cálculo. Dices qué campos quieres y de qué tabla.</p>
       <code class="wiki-ejemplo">SELECT nombre, fecha_ingreso
 FROM pacientes;</code>
-      <p><code>*</code> trae todas las columnas. Mejor listar solo lo que pide el ticket.</p>
-      <p class="wiki-tip">Tip: en el hospital, empieza con SELECT y mira el resultado con ▶ Play antes de filtrar.</p>
+      <p><code>*</code> trae todo. Mejor pedir solo lo que dice el ticket.</p>
+      <p class="wiki-tip">Tip: escribe el SELECT, dale a ▶ Play y mira el resultado antes de complicarlo.</p>
     `,
   },
   {
     id: "where",
     titulo: "WHERE",
     html: `
-      <h3>WHERE — filtrar filas</h3>
-      <p>Deja solo las filas que cumplen una condición. Sin WHERE, ves toda la tabla.</p>
+      <h3>WHERE — filtrar</h3>
+      <p>Deja solo las filas que cumplen una condición. Sin WHERE ves la tabla completa.</p>
       <code class="wiki-ejemplo">SELECT nombre, tipo
 FROM tratamientos
 WHERE tipo = 'cirugia';</code>
       <ul>
-        <li><code>=</code>, <code>&lt;&gt;</code>, <code>&lt;</code>, <code>&gt;</code> comparan valores</li>
-        <li><code>AND</code> / <code>OR</code> combinan condiciones</li>
-        <li>Textos van entre comillas simples: <code>'urgencia'</code></li>
+        <li>Textos entre comillas simples: <code>'urgencia'</code></li>
+        <li><code>AND</code> = deben cumplirse las dos; <code>OR</code> = basta con una</li>
       </ul>
     `,
   },
@@ -452,15 +463,15 @@ WHERE tipo = 'cirugia';</code>
     id: "order-by",
     titulo: "ORDER BY",
     html: `
-      <h3>ORDER BY — ordenar el resultado</h3>
-      <p>Ordena las filas del resultado. Muchos tickets exigen un orden concreto.</p>
+      <h3>ORDER BY — ordenar la lista</h3>
+      <p>Decide quién sale primero. Muchos tickets son estrictos con el orden.</p>
       <code class="wiki-ejemplo">SELECT nombre, fecha_ingreso
 FROM pacientes
 ORDER BY fecha_ingreso DESC, nombre;</code>
       <ul>
-        <li><code>ASC</code> = ascendente (por defecto)</li>
-        <li><code>DESC</code> = descendente</li>
-        <li>Puedes ordenar por varias columnas, en ese orden de prioridad</li>
+        <li><code>DESC</code> = de mayor a menor (o más reciente primero)</li>
+        <li>Si pides dos criterios, el primero manda; el segundo solo desempata</li>
+        <li>Ejemplo: primero por cantidad, y si empatan, por nombre A→Z: <code>ORDER BY total DESC, tipo</code></li>
       </ul>
     `,
   },
@@ -468,32 +479,28 @@ ORDER BY fecha_ingreso DESC, nombre;</code>
     id: "join",
     titulo: "JOIN",
     html: `
-      <h3>JOIN — unir tablas</h3>
-      <p>Combina filas de dos tablas usando una clave en común (por ejemplo <code>departamento_id</code> ↔ <code>id</code>).</p>
+      <h3>JOIN — juntar dos tablas</h3>
+      <p>Imagina dos listas del hospital. JOIN las cruza cuando comparten un mismo código (por ejemplo el departamento).</p>
       <code class="wiki-ejemplo">SELECT p.nombre AS paciente, d.nombre AS departamento
 FROM pacientes p
 JOIN departamentos d ON p.departamento_id = d.id
 ORDER BY p.nombre;</code>
-      <ul>
-        <li><strong>INNER JOIN</strong> (o solo <code>JOIN</code>): solo filas con pareja en ambas tablas</li>
-        <li><strong>LEFT JOIN</strong>: todas las de la izquierda, aunque no haya pareja a la derecha</li>
-      </ul>
-      <p class="wiki-tip">Si ambas tablas tienen <code>nombre</code>, renómbralas con <code>AS</code> para no pisar columnas.</p>
+      <p class="wiki-tip">Si las dos tablas tienen una columna «nombre», ponles apodo con AS para no confundirlas.</p>
     `,
   },
   {
     id: "group-by",
     titulo: "GROUP BY",
     html: `
-      <h3>GROUP BY — agrupar y contar</h3>
-      <p>Agrupa filas que comparten un valor y calcula un número por grupo con <code>COUNT</code>, <code>SUM</code>, <code>AVG</code>…</p>
+      <h3>GROUP BY — resumir y contar</h3>
+      <p>En vez de cada fila suelta, juntas las que se parecen (mismo tipo) y cuentas cuántas hay en cada montón.</p>
       <code class="wiki-ejemplo">SELECT tipo, COUNT(*) AS total
 FROM tratamientos
 GROUP BY tipo
-ORDER BY total DESC;</code>
+ORDER BY total DESC, tipo;</code>
       <ul>
-        <li>Todo lo del <code>SELECT</code> que no sea agregación debe ir también en el <code>GROUP BY</code></li>
-        <li><code>COUNT(*)</code> cuenta filas del grupo; <code>COUNT(columna)</code> ignora NULLs</li>
+        <li><code>COUNT(*)</code> = «¿cuántas hay en este grupo?»</li>
+        <li>Si dos grupos empatan en cantidad y piden orden alfabético, añade el nombre al final del ORDER BY</li>
       </ul>
     `,
   },
@@ -501,12 +508,11 @@ ORDER BY total DESC;</code>
     id: "alias",
     titulo: "Alias (AS)",
     html: `
-      <h3>Alias — renombrar tablas y columnas</h3>
-      <p>Un alias acorta nombres y evita choques cuando dos tablas tienen la misma columna.</p>
+      <h3>AS — poner apodos</h3>
+      <p>Sirve para renombrar una columna o acortar el nombre de una tabla. Útil cuando dos tablas se llaman igual en una columna.</p>
       <code class="wiki-ejemplo">SELECT p.nombre AS paciente, d.nombre AS departamento
 FROM pacientes AS p
 JOIN departamentos AS d ON p.departamento_id = d.id;</code>
-      <p>Después del alias, usa ese nombre corto en el resto de la consulta (<code>p.</code>, <code>d.</code>).</p>
     `,
   },
   {
@@ -515,13 +521,13 @@ JOIN departamentos AS d ON p.departamento_id = d.id;</code>
     html: `
       <h3>Cómo entregar un ticket</h3>
       <ol style="margin:0 0 0.7rem;padding-left:1.15rem;font-size:0.82rem;line-height:1.45">
-        <li>Lee el motivo y la solicitud (qué columnas y qué orden pide)</li>
-        <li>Consulta el <strong>esquema</strong> si no recuerdas las tablas</li>
-        <li>Escribe la query y pruébala con <strong>▶ Play</strong></li>
-        <li>Cuando el resultado cuadre, <strong>✓ Enviar ticket</strong></li>
+        <li>Lee el motivo y la solicitud (qué quieren ver y en qué orden)</li>
+        <li>Si te pierdes, abre el <strong>esquema</strong> o la <strong>Wiki SQL</strong></li>
+        <li>Escribe, prueba con <strong>▶ Play</strong> y revisa la tabla de resultado</li>
+        <li>Cuando se vea bien, <strong>✓ Enviar ticket</strong></li>
       </ol>
-      <p>Cada ticket tiene intentos limitados. Un fallo gasta un intento; si se acaban, el ticket se pierde.</p>
-      <p class="wiki-tip">Esta wiki y el esquema están en las pestañas del hub y también en la consola del ticket.</p>
+      <p>Tienes pocos intentos por ticket. Un fallo gasta uno; si se acaban, ese ticket se pierde.</p>
+      <p class="wiki-tip">No hace falta memorizar: la wiki y el mentor están para cuando se te olvide.</p>
     `,
   },
 ];
@@ -830,6 +836,7 @@ async function mostrarMenu() {
 async function iniciarPartida() {
   const estadoJuego = await invoke("iniciar_partida");
   leccionesMentorMostradas = new Set();
+  perksYaRenderizados = false;
   pintarHubDesdeEstadoJuego(estadoJuego);
   await cargarPerks();
   setStatus("Partida nueva iniciada.", "ok");
@@ -852,6 +859,7 @@ async function iniciarPartida() {
 async function cargarPartida() {
   try {
     const estadoJuego = await invoke("cargar_partida");
+    perksYaRenderizados = false;
     pintarHubDesdeEstadoJuego(estadoJuego);
     await cargarPerks();
     setStatus("Partida cargada.", "ok");
@@ -983,6 +991,7 @@ async function submitTicket() {
     mostrarScoring(score);
     setStatus(score.mensaje, score.pass ? "ok" : "error");
     await cargarTurno();
+    await cargarPerks();
     return true;
   } catch (err) {
     setStatus(String(err), "error");
@@ -1000,35 +1009,141 @@ async function submitTicket() {
   }
 }
 
-function renderPerks({ perks, max_slots }) {
+const PERK_CATEGORIA_LABEL = {
+  Detective: "Detective",
+  ManosRapidas: "Manos rápidas",
+  BilleteraYFama: "Billetera",
+  Ritmo: "Ritmo",
+};
+
+const PERK_CATEGORIA_CLASE = {
+  Detective: "detective",
+  ManosRapidas: "manos",
+  BilleteraYFama: "billetera",
+  Ritmo: "ritmo",
+};
+
+function iconoSvgPerk(categoria, bloqueado) {
+  if (bloqueado) {
+    return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="1"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`;
+  }
+  switch (categoria) {
+    case "Detective":
+      return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/></svg>`;
+    case "ManosRapidas":
+      return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/></svg>`;
+    case "BilleteraYFama":
+      return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20"/><circle cx="16" cy="14" r="1.5"/></svg>`;
+    case "Ritmo":
+      return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 4v10"/><circle cx="12" cy="17" r="3"/><path d="M12 4c3 2 6 2 8 0"/></svg>`;
+    default:
+      return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.9 6.3 6.9.6-5.2 4.6 1.6 6.8L12 17l-6.2 3.3 1.6-6.8L2.2 8.9l6.9-.6z"/></svg>`;
+  }
+}
+
+function renderPerkSlots(equipadosCount, maxSlots) {
+  if (!perkSlotsEl) return;
+  perkSlotsEl.innerHTML = "";
+  for (let i = 0; i < maxSlots; i += 1) {
+    const slot = document.createElement("span");
+    slot.className = `perk-slot${i < equipadosCount ? " perk-slot--lleno" : ""}`;
+    perkSlotsEl.appendChild(slot);
+  }
+  if (perkSlotsLabelEl) {
+    perkSlotsLabelEl.textContent = `Slots ${equipadosCount}/${maxSlots}`;
+  }
+}
+
+function renderPerks({ perks, max_slots, ocultos = 0 }) {
   listaPerks.innerHTML = "";
+  const equipados = perks.filter((p) => p.equipado);
+  renderPerkSlots(equipados.length, max_slots);
+
   perks.forEach((perk, indice) => {
+    const estadoClase = perk.equipado ? "equipado" : perk.desbloqueado ? "desbloqueado" : "bloqueado";
+    const catClase = PERK_CATEGORIA_CLASE[perk.categoria] || "default";
+    const catLabel = PERK_CATEGORIA_LABEL[perk.categoria] || perk.categoria;
+    const estadoLabel = perk.equipado ? "Equipado" : perk.desbloqueado ? "Listo" : "Bloqueado";
+
     const li = document.createElement("li");
-    li.className = `papel papel-perk papel-entrando ${perk.equipado ? "equipado" : perk.desbloqueado ? "desbloqueado" : ""}`.trim();
-    li.style.animationDelay = `${indice * 60}ms`;
+    li.className = `perk-card perk-card--${estadoClase} perk-card--${catClase} perk-card-entrando`;
+    li.style.animationDelay = `${indice * 55}ms`;
     li.dataset.tooltip = perk.descripcion;
+    li.dataset.perkId = perk.id;
 
-    const ICONO_EQUIPADO = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2l2.9 6.3 6.9.6-5.2 4.6 1.6 6.8L12 17l-6.2 3.3 1.6-6.8L2.2 8.9l6.9-.6z"/></svg>`;
-    const ICONO_DESBLOQUEADO = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`;
-    const ICONO_BLOQUEADO = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="1"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`;
+    if (perksYaRenderizados && perk.desbloqueado && !perkIdsPrevios.desbloqueados.has(perk.id)) {
+      li.classList.add("perk-card--flash");
+    }
+    if (perksYaRenderizados && perk.equipado && !perkIdsPrevios.equipados.has(perk.id)) {
+      li.classList.add("perk-card--pulse-in");
+    }
+    if (perksYaRenderizados && !perkIdsPrevios.vistos.has(perk.id)) {
+      li.classList.add("perk-card--reveal");
+    }
 
-    const info = document.createElement("span");
-    const iconoEstado = perk.equipado ? ICONO_EQUIPADO : perk.desbloqueado ? ICONO_DESBLOQUEADO : ICONO_BLOQUEADO;
-    const textoEstado = perk.equipado ? "equipado" : perk.desbloqueado ? "desbloqueado" : "bloqueado";
-    info.innerHTML = `${iconoEstado} ${perk.nombre} (${perk.categoria}) — ${textoEstado} — $${perk.costo_dinero}, ⭐${perk.reputacion_minima}`;
+    const icono = document.createElement("div");
+    icono.className = "perk-icon";
+    icono.innerHTML = iconoSvgPerk(perk.categoria, !perk.desbloqueado && !perk.equipado);
+
+    const cuerpo = document.createElement("div");
+    cuerpo.className = "perk-cuerpo";
+    const meta = document.createElement("div");
+    meta.className = "perk-meta";
+    meta.textContent = `${catLabel} · ${estadoLabel}`;
+    const nombre = document.createElement("div");
+    nombre.className = "perk-nombre";
+    nombre.textContent = perk.nombre;
+    const detalle = document.createElement("div");
+    detalle.className = "perk-detalle";
+    detalle.textContent = perk.desbloqueado
+      ? perk.descripcion
+      : `$${perk.costo_dinero} · ⭐${perk.reputacion_minima}`;
+    cuerpo.appendChild(meta);
+    cuerpo.appendChild(nombre);
+    cuerpo.appendChild(detalle);
 
     const boton = document.createElement("button");
-    boton.textContent = perk.equipado ? "Desequipar" : perk.desbloqueado ? "Equipar" : "Desbloquear";
-    boton.addEventListener("click", () => accionPerk(perk));
+    boton.type = "button";
+    boton.className = "perk-accion";
+    boton.textContent = perk.equipado ? "Quitar" : perk.desbloqueado ? "Equipar" : "Comprar";
+    boton.title = perk.equipado ? "Dejar de usar este perk" : perk.desbloqueado ? "Usar este perk" : "Desbloquear con dinero";
+    boton.addEventListener("click", (evento) => {
+      evento.stopPropagation();
+      accionPerk(perk);
+    });
 
-    li.appendChild(info);
+    li.appendChild(icono);
+    li.appendChild(cuerpo);
     li.appendChild(boton);
     listaPerks.appendChild(li);
   });
 
-  const equipados = perks.filter((p) => p.equipado).map((p) => p.nombre);
+  if (ocultos > 0) {
+    const teaser = document.createElement("li");
+    teaser.className = "perk-card perk-card--teaser perk-card-entrando";
+    teaser.style.animationDelay = `${perks.length * 55}ms`;
+    teaser.innerHTML = `
+      <div class="perk-icon">${iconoSvgPerk("Detective", true)}</div>
+      <div class="perk-cuerpo">
+        <div class="perk-meta">Próximamente</div>
+        <div class="perk-nombre">${ocultos} perk${ocultos === 1 ? "" : "s"} más</div>
+        <div class="perk-detalle">Sube de rango o reputación para revelar mejores bonos.</div>
+      </div>
+    `;
+    listaPerks.appendChild(teaser);
+  }
+
+  perkIdsPrevios = {
+    desbloqueados: new Set(perks.filter((p) => p.desbloqueado || p.equipado).map((p) => p.id)),
+    equipados: new Set(equipados.map((p) => p.id)),
+    vistos: new Set(perks.map((p) => p.id)),
+  };
+  perksYaRenderizados = true;
+
   const resumen = `Perks equipados: ${equipados.length}/${max_slots}`;
-  perksEquipadosMsg.textContent = equipados.length ? `${resumen} — ${equipados.join(", ")}` : `${resumen} — ninguno equipado.`;
+  perksEquipadosMsg.textContent = equipados.length
+    ? `${resumen} — ${equipados.map((p) => p.nombre).join(", ")}`
+    : `${resumen} — ninguno equipado.`;
 }
 
 async function cargarPerks() {
@@ -1153,6 +1268,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   rangoEl = document.querySelector("#rango");
   listaPerks = document.querySelector("#lista-perks");
   perksEquipadosMsg = document.querySelector("#perks-equipados-msg");
+  perkSlotsEl = document.querySelector("#perk-slots");
+  perkSlotsLabelEl = document.querySelector("#perk-slots-label");
   presupuestoEl = document.querySelector("#presupuesto");
   listaTickets = document.querySelector("#lista-tickets");
   ticketActivoInfo = document.querySelector("#ticket-activo-info");
