@@ -18,6 +18,9 @@ let empresaNombreEl, empresaDescripcionEl;
 let esquemaOverlay, esquemaLienzo, esquemaSvg;
 let posicionesActuales = {};
 let esquemaRelacionesActuales = [];
+let cajaArrastrando = null;
+let offsetArrastreX = 0;
+let offsetArrastreY = 0;
 
 const RETRATOS = {
   generico: `<svg viewBox="0 0 8 8"><rect width="8" height="8" fill="#4a4a3a"/><rect x="2" y="1" width="4" height="3" fill="#8a8266"/><rect x="1" y="4" width="6" height="3" fill="#6b6b52"/><rect x="3" y="2" width="1" height="1" fill="#2a2a1f"/><rect x="5" y="2" width="1" height="1" fill="#2a2a1f"/></svg>`,
@@ -518,6 +521,15 @@ function crearCajaTabla(tabla, posicion) {
   });
   caja.appendChild(listaColumnas);
 
+  caja.addEventListener("mousedown", (evento) => {
+    cajaArrastrando = tabla.nombre;
+    const rect = esquemaLienzo.getBoundingClientRect();
+    const posicion = posicionesActuales[tabla.nombre];
+    offsetArrastreX = evento.clientX - rect.left + esquemaLienzo.scrollLeft - posicion.x;
+    offsetArrastreY = evento.clientY - rect.top + esquemaLienzo.scrollTop - posicion.y;
+    evento.preventDefault();
+  });
+
   return caja;
 }
 
@@ -633,6 +645,22 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   document.querySelector("#btn-cerrar-esquema").addEventListener("click", () => {
     esquemaOverlay.classList.add("oculto");
+  });
+
+  document.addEventListener("mousemove", (evento) => {
+    if (!cajaArrastrando) return;
+    const rect = esquemaLienzo.getBoundingClientRect();
+    const nuevaX = evento.clientX - rect.left + esquemaLienzo.scrollLeft - offsetArrastreX;
+    const nuevaY = evento.clientY - rect.top + esquemaLienzo.scrollTop - offsetArrastreY;
+    posicionesActuales[cajaArrastrando] = { x: nuevaX, y: nuevaY };
+    const caja = esquemaLienzo.querySelector(`[data-tabla="${cajaArrastrando}"]`);
+    caja.style.left = `${nuevaX}px`;
+    caja.style.top = `${nuevaY}px`;
+    dibujarRelaciones(esquemaRelacionesActuales);
+  });
+
+  document.addEventListener("mouseup", () => {
+    cajaArrastrando = null;
   });
 
   document.querySelector("#btn-guardar-pausa").addEventListener("click", () => {
