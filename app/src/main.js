@@ -1,4 +1,16 @@
-import { sfxClick, sfxTecleo, sfxCierreDia, sfxTick, sfxExito, sfxError, sfxAscenso, iniciarAmbiente, alternarMusica, alternarEfectos } from "./audio.js";
+import {
+  sfxClick,
+  sfxTecleo,
+  sfxCierreDia,
+  sfxTick,
+  sfxExito,
+  sfxError,
+  sfxAscenso,
+  iniciarAmbiente,
+  alternarMusica,
+  alternarEfectos,
+  establecerModoMusica,
+} from "./audio.js";
 import {
   iniciarTutorial,
   tutorialActivo,
@@ -135,6 +147,8 @@ function renderRango(rango) {
   progresoRangoSiguienteEl.textContent = siguienteRango
     ? `➜ ${NOMBRE_RANGO[siguienteRango]}`
     : "Alcanzaste el máximo rango disponible";
+
+  rangoActual = rango;
 }
 
 function actualizarDinero(valor) {
@@ -145,9 +159,27 @@ function actualizarDinero(valor) {
 function actualizarReputacion(valorFormateado) {
   reputacionEl.textContent = valorFormateado;
   reputacionHubEl.textContent = valorFormateado;
+  reputacionActual = Number.parseFloat(valorFormateado) || 0;
 }
 
 let ticketActivoId = null;
+
+const UMBRAL_ASCENSO_AUXILIAR = 500;
+
+/** @type {{ titulo: string, pass: boolean, deltaDinero: number, deltaRep: number, ascendio: boolean } | null} */
+let ultimoFeedback = null;
+let modoBossActivo = false;
+let bannerBossMostrado = false;
+let reputacionActual = 0;
+let rangoActual = "Becario";
+let ticketActivoMotivo = "";
+
+let panelArcoCaminoEl, panelArcoFillEl, panelArcoRepEl, panelArcoTurnoEl, panelArcoLabelEl;
+let ticketToastEl, bossBannerEl;
+let dineroHubPopEl, reputacionHubPopEl;
+let toastTimer = null;
+let bossBannerTimer = null;
+
 let empresaActual = null;
 
 function crearTablaFilas(rows) {
@@ -287,12 +319,63 @@ async function runAllQueries() {
 
 function seleccionarTicket(ticket) {
   ticketActivoId = ticket.id;
+  ticketActivoMotivo = ticket.motivo || ticket.id;
   ticketActivoInfo.textContent = `Motivo: ${ticket.motivo}\nSolicitud: ${ticket.solicitud}`;
   sqlInput.value = tutorialActivo() ? "" : (ticket.sql_inicial || "SELECT * FROM pacientes;");
   ticketRetrato.innerHTML = retratoParaSolicitante(ticket.solicitante);
   consolaTitulo.textContent = `query-path — ${ticket.id}`;
   mostrarPantalla("consola");
   notificarClicPrimerTicket();
+}
+
+function actualizarPanelArco({ empresa, fase, pendientesCount, presupuesto }) {
+  const mostrarCamino =
+    empresa === "HospitalArcangel" &&
+    (rangoActual === "Becario" || fase === "MiniBoss");
+
+  panelArcoCaminoEl.classList.toggle("oculto", !mostrarCamino);
+
+  if (mostrarCamino) {
+    const enBoss = fase === "MiniBoss";
+    const rep = Math.min(reputacionActual, UMBRAL_ASCENSO_AUXILIAR);
+    const pct = enBoss
+      ? 100
+      : Math.max(0, Math.min(100, (rep / UMBRAL_ASCENSO_AUXILIAR) * 100));
+    panelArcoFillEl.style.width = `${pct}%`;
+    panelArcoFillEl.classList.toggle("es-completo", enBoss || rep >= UMBRAL_ASCENSO_AUXILIAR);
+    panelArcoLabelEl.textContent = enBoss ? "Camino al Auditor — completo" : "Camino al Auditor";
+    panelArcoRepEl.textContent = enBoss
+      ? `${UMBRAL_ASCENSO_AUXILIAR} / ${UMBRAL_ASCENSO_AUXILIAR} rep`
+      : `${rep.toFixed(1)} / ${UMBRAL_ASCENSO_AUXILIAR} rep`;
+  }
+
+  panelArcoTurnoEl.textContent = `Bandeja · ${pendientesCount} pendientes · presupuesto ${presupuesto}`;
+}
+
+function sincronizarModoBoss(fase) {
+  const enBoss = fase === "MiniBoss";
+  modoBossActivo = enBoss;
+  pantallaHub.classList.toggle("hub-boss", enBoss);
+  establecerModoMusica(enBoss ? "boss" : "ambiente");
+
+  if (!enBoss) {
+    bannerBossMostrado = false;
+    bossBannerEl.classList.add("oculto");
+    return;
+  }
+
+  if (!bannerBossMostrado) {
+    mostrarBannerBoss();
+  }
+}
+
+function mostrarBannerBoss() {
+  bannerBossMostrado = true;
+  bossBannerEl.classList.remove("oculto");
+  if (bossBannerTimer) clearTimeout(bossBannerTimer);
+  bossBannerTimer = setTimeout(() => {
+    bossBannerEl.classList.add("oculto");
+  }, 2800);
 }
 
 function renderBandeja(estadoTurno) {
@@ -347,6 +430,13 @@ function renderBandeja(estadoTurno) {
     ticketActivoId = null;
     ticketActivoInfo.textContent = "Elige un ticket de la bandeja para empezar.";
   }
+  actualizarPanelArco({
+    empresa: estadoTurno.empresa,
+    fase: estadoTurno.fase,
+    pendientesCount: estadoTurno.pendientes.length,
+    presupuesto: estadoTurno.presupuesto_restante,
+  });
+  sincronizarModoBoss(estadoTurno.fase);
   if (estadoTurno.fase === "ArcoCompletado") {
     agenciaOverlay.classList.remove("oculto");
   }
@@ -704,6 +794,15 @@ window.addEventListener("DOMContentLoaded", async () => {
   tooltipGlobal = document.querySelector("#tooltip-global");
   empresaNombreEl = document.querySelector("#empresa-nombre");
   empresaDescripcionEl = document.querySelector("#empresa-descripcion");
+  panelArcoCaminoEl = document.querySelector("#panel-arco-camino");
+  panelArcoFillEl = document.querySelector("#panel-arco-fill");
+  panelArcoRepEl = document.querySelector("#panel-arco-rep");
+  panelArcoTurnoEl = document.querySelector("#panel-arco-turno");
+  panelArcoLabelEl = document.querySelector("#panel-arco-label");
+  ticketToastEl = document.querySelector("#ticket-toast");
+  bossBannerEl = document.querySelector("#boss-banner");
+  dineroHubPopEl = document.querySelector("#dinero-hub-pop");
+  reputacionHubPopEl = document.querySelector("#reputacion-hub-pop");
 
   await mostrarMenu();
 
