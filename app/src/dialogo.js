@@ -13,6 +13,11 @@ let revelando = false;
 
 const VELOCIDAD_REVELADO_MS = 30;
 
+// Deliberadamente solo bloquea "click" — no mousedown/keydown. El tutorial
+// (Plan 17) depende de que un elemento no permitido, como #sql-input durante
+// el beat de Enviar, siga siendo enfocable y editable con el teclado para
+// poder corregir un intento fallido; bloquear esos eventos también dejaría
+// al jugador sin forma de arreglar su query mientras el diálogo sigue abierto.
 function manejarClickDocumento(evento) {
   const enTarjeta = evento.target.closest(".dialogo-tarjeta");
   const enPermitido = selectoresPermitidos.some((selector) => evento.target.closest(selector));
