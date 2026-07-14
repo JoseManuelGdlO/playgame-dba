@@ -39,10 +39,12 @@
           <div class="hub-badge" data-tooltip="Dinero disponible — se gana resolviendo tickets y se gasta desbloqueando perks.">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5c0-1 1-1.5 3-1.5s3 1 3 2-1 1.5-3 1.5-3 .5-3 1.5 1 2 3 2 3-.5 3-1.5"/></svg>
             <span id="dinero-hub">0</span>
+            <span id="dinero-hub-pop" class="hub-badge-pop oculto" aria-hidden="true"></span>
           </div>
           <div class="hub-badge" data-tooltip="Reputación — sube al resolver tickets bien y determina qué perks y rangos puedes alcanzar.">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2l2.9 6.3 6.9.6-5.2 4.6 1.6 6.8L12 17l-6.2 3.3 1.6-6.8L2.2 8.9l6.9-.6z"/></svg>
             <span id="reputacion-hub">0</span>
+            <span id="reputacion-hub-pop" class="hub-badge-pop oculto" aria-hidden="true"></span>
           </div>
         </div>
 
@@ -80,6 +82,16 @@
             <div class="tarjeta-empresa">
               <div class="tarjeta-empresa-nombre" id="empresa-nombre">Hospital Arcángel</div>
               <p class="tarjeta-empresa-descripcion" id="empresa-descripcion"></p>
+            </div>
+            <div class="panel-arco" id="panel-arco">
+              <div class="panel-arco-camino" id="panel-arco-camino">
+                <div class="panel-arco-label" id="panel-arco-label">Camino al Auditor</div>
+                <div class="panel-arco-barra" aria-hidden="true">
+                  <div class="panel-arco-fill" id="panel-arco-fill"></div>
+                </div>
+                <div class="panel-arco-rep" id="panel-arco-rep">0 / 500 rep</div>
+              </div>
+              <div class="panel-arco-turno" id="panel-arco-turno">Bandeja · 0 pendientes · presupuesto 0</div>
             </div>
             <h2 id="bandeja-titulo">Bandeja — turno actual</h2>
             <p>⏱️ Presupuesto de tiempo: <span id="presupuesto">0</span></p>
@@ -155,6 +167,13 @@
           </div>
         </div>
       </main>
+    </div>
+
+    <div id="ticket-toast" class="ticket-toast oculto" role="status" aria-live="polite"></div>
+
+    <div id="boss-banner" class="boss-banner oculto" role="alert">
+      <div class="boss-banner-titulo">Ascenso · El Auditor te espera</div>
+      <div class="boss-banner-sub">Prepárate. Los tickets normales quedaron atrás.</div>
     </div>
 
     <div id="scoring-overlay" class="scoring-overlay oculto">
