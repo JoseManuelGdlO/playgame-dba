@@ -14,22 +14,6 @@ pub(crate) fn catalogo() -> Vec<Ticket> {
             "SELECT nombre, piso FROM departamentos",
             10,
         ),
-        plantilla_reporte_simple_sin_orden(
-            "hospital_reporte_empleados_directorio",
-            "Recursos Humanos",
-            "RH quiere el directorio de personal a la mano antes de la reunión de la tarde.",
-            "Lista el nombre y el puesto de cada empleado.",
-            "SELECT nombre, puesto FROM empleados",
-            10,
-        ),
-        plantilla_reporte_simple_sin_orden(
-            "hospital_reporte_habitaciones_inventario",
-            "Administración de Instalaciones",
-            "Mantenimiento necesita el inventario de habitaciones para su checklist mensual.",
-            "Lista el número y el tipo de cada habitación.",
-            "SELECT numero, tipo FROM habitaciones",
-            10,
-        ),
         plantilla_reporte_simple(
             "hospital_reporte_pacientes_cardiologia",
             "Contabilidad",
@@ -52,6 +36,22 @@ pub(crate) fn catalogo() -> Vec<Ticket> {
             "Auditoría de Calidad necesita confirmar cuántos pacientes siguen internados para su reporte semanal de ocupación.",
             "Lista el nombre y la fecha de ingreso de los pacientes que todavía no tienen fecha de alta, del ingreso más antiguo al más reciente.",
             "SELECT nombre, fecha_ingreso FROM pacientes WHERE fecha_alta IS NULL ORDER BY fecha_ingreso, nombre",
+            10,
+        ),
+        plantilla_reporte_simple_sin_orden(
+            "hospital_reporte_empleados_directorio",
+            "Recursos Humanos",
+            "RH quiere el directorio de personal a la mano antes de la reunión de la tarde.",
+            "Lista el nombre y el puesto de cada empleado.",
+            "SELECT nombre, puesto FROM empleados",
+            10,
+        ),
+        plantilla_reporte_simple_sin_orden(
+            "hospital_reporte_habitaciones_inventario",
+            "Administración de Instalaciones",
+            "Mantenimiento necesita el inventario de habitaciones para su checklist mensual.",
+            "Lista el número y el tipo de cada habitación.",
+            "SELECT numero, tipo FROM habitaciones",
             10,
         ),
         plantilla_reporte_agregado(
@@ -154,7 +154,29 @@ pub(crate) fn mini_boss() -> Vec<Ticket> {
 mod tests {
     use super::*;
     use crate::db::{self, Company};
+    use crate::tickets::{tickets_elegibles, Rango};
     use crate::validation;
+
+    #[test]
+    fn el_primer_lote_de_becario_es_departamentos_cardiologia_habitaciones_libres() {
+        // Regresión (Plan 16, revisión final): el tutorial exige que
+        // pendientes[0] sea "hospital_reporte_departamentos" y pendientes[1]
+        // sea "hospital_reporte_pacientes_cardiologia" (main.js
+        // TICKET_TUTORIAL_ID_PASO1/PASO2). `EstadoTurno::nuevo` toma los
+        // primeros TAMANO_LOTE (3) tickets elegibles de Becario en el orden
+        // del catálogo — si alguien reordena `catalogo()` sin pensar en esto,
+        // este test debe fallar.
+        let elegibles = tickets_elegibles(&catalogo(), Rango::Becario);
+        let primeros_3: Vec<&str> = elegibles.iter().take(3).map(|t| t.id).collect();
+        assert_eq!(
+            primeros_3,
+            vec![
+                "hospital_reporte_departamentos",
+                "hospital_reporte_pacientes_cardiologia",
+                "hospital_reporte_habitaciones_libres",
+            ]
+        );
+    }
 
     #[test]
     fn catalogo_tiene_9_reportes_y_2_depuraciones() {
