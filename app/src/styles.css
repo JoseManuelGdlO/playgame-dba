@@ -746,3 +746,41 @@ tr:nth-child(even) td {
   opacity: 0.55;
   pointer-events: none;
 }
+
+.papel-perk {
+  position: relative;
+}
+
+.tooltip-perk {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  margin-top: 0.4rem;
+  background: #f7f0dc;
+  color: #2a2018;
+  border-radius: 4px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  box-shadow: 3px 4px 10px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+  z-index: 20;
+}
+
+.papel-perk:hover .tooltip-perk {
+  opacity: 1;
+}
+
+button,
+.papel,
+.pestana,
+.control-audio {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cg fill='%23f0e6d2' stroke='%232a2018' stroke-width='1.5' stroke-linejoin='round'%3E%3Crect x='11' y='4' width='4' height='12' rx='2'/%3E%3Crect x='15' y='8' width='4' height='9' rx='2'/%3E%3Crect x='7' y='13' width='16' height='10' rx='4'/%3E%3C/g%3E%3C/svg%3E") 13 5, pointer;
+}
+
+.pestana-bloqueada {
+  cursor: not-allowed;
+}

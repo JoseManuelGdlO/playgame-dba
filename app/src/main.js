@@ -379,8 +379,13 @@ function renderPerks(perks) {
     boton.textContent = perk.equipado ? "Desequipar" : perk.desbloqueado ? "Equipar" : "Desbloquear";
     boton.addEventListener("click", () => accionPerk(perk));
 
+    const tooltip = document.createElement("div");
+    tooltip.className = "tooltip-perk";
+    tooltip.textContent = perk.descripcion;
+
     li.appendChild(info);
     li.appendChild(boton);
+    li.appendChild(tooltip);
     listaPerks.appendChild(li);
   });
 
