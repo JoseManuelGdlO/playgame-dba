@@ -1018,3 +1018,155 @@ button,
   left: 0.75rem;
   z-index: 9500;
 }
+
+.hub-badge-pop {
+  color: #2f6b2f;
+  font-size: 0.65rem;
+  font-weight: 700;
+  margin-left: 0.25rem;
+  animation: hub-pop-fade 1.6s ease-out forwards;
+}
+
+.hub-badge-pop.es-negativo {
+  color: #8a2a2a;
+}
+
+@keyframes hub-pop-fade {
+  0% { opacity: 0; transform: translateY(4px); }
+  15% { opacity: 1; transform: translateY(0); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-4px); }
+}
+
+.panel-arco {
+  background: #ebe0c8;
+  border: 1px solid #2a2018;
+  border-radius: 2px;
+  padding: 0.55rem 0.7rem;
+  margin-bottom: 0.75rem;
+  box-shadow: 1px 2px 0 rgba(0, 0, 0, 0.15);
+}
+
+.panel-arco-label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #5a4a35;
+  margin-bottom: 0.3rem;
+}
+
+.panel-arco-barra {
+  height: 10px;
+  background: #d4c6a8;
+  border: 1px solid #2a2018;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.panel-arco-fill {
+  height: 100%;
+  width: 0%;
+  background: #3d6b3d;
+  transition: width 0.45s ease-out;
+}
+
+.panel-arco-fill.es-completo {
+  background: #8a2a2a;
+}
+
+.panel-arco-rep {
+  font-size: 0.62rem;
+  margin-top: 0.25rem;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  color: #2a2018;
+}
+
+.panel-arco-turno {
+  font-size: 0.62rem;
+  margin-top: 0.35rem;
+  color: #5a4a35;
+}
+
+.panel-arco-camino.oculto {
+  display: none;
+}
+
+.ticket-toast {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 60;
+  max-width: 260px;
+  background: #1f3d1f;
+  color: #f3f0e6;
+  border: 2px solid #2a2018;
+  border-radius: 6px;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.35);
+  animation: toast-in 0.25s ease-out;
+}
+
+.ticket-toast.es-fallo {
+  background: #4a1c1c;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.boss-banner {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: rgba(20, 8, 8, 0.82);
+  color: #f5d0d0;
+  text-align: center;
+  pointer-events: none;
+  animation: boss-banner-in 0.35s ease-out;
+}
+
+.boss-banner.oculto {
+  display: none;
+}
+
+.boss-banner-titulo {
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.boss-banner-sub {
+  font-size: 0.85rem;
+  opacity: 0.9;
+}
+
+@keyframes boss-banner-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.hub-folder.hub-boss {
+  box-shadow: inset 0 0 0 3px #8a2a2a, 0 0 0 1px #5a1515;
+}
+
+.hub-folder.hub-boss .tarjeta-empresa {
+  border: 1px solid #8a2a2a;
+  background: #f3e0d0;
+}
+
+.hub-folder.hub-boss #bandeja-titulo {
+  color: #6a1a1a;
+}
+
+.hub-folder.hub-boss .papel-ticket {
+  box-shadow: 2px 2px 0 rgba(138, 42, 42, 0.35);
+  border-color: #8a2a2a;
+}
