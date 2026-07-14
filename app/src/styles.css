@@ -15,7 +15,7 @@ body {
 }
 
 .container {
-  max-width: 900px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 2rem 1.5rem 3rem;
 }
@@ -513,9 +513,14 @@ tr:nth-child(even) td {
 
 .hub-grid {
   display: grid;
-  grid-template-columns: 170px 1fr 220px;
+  grid-template-columns: 170px 1fr 340px;
   gap: 1rem;
   align-items: start;
+}
+
+.hub-columna-perks {
+  max-height: 65vh;
+  overflow-y: auto;
 }
 
 .tarjeta-perfil {
