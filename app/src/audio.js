@@ -9,6 +9,12 @@ const PATRON_AMBIENTE_HZ = [130.81, 164.81, 196.0, 164.81];
 const DURACION_NOTA_AMBIENTE_MS = 700;
 const FRECUENCIA_PAD_HZ = 65.41;
 
+const PATRON_BOSS_HZ = [110, 110, 130.81, 98, 110, 82.41];
+const DURACION_NOTA_BOSS_MS = 420;
+const FRECUENCIA_PAD_BOSS_HZ = 55;
+
+let modoMusica = "ambiente"; // "ambiente" | "boss"
+
 function obtenerContexto() {
   if (!contexto) {
     contexto = new (window.AudioContext || window.webkitAudioContext)();
@@ -89,15 +95,17 @@ function reproducirNotaAmbiente(frecuenciaHz) {
   const bus = obtenerBusAmbiente();
   const osc = ctx.createOscillator();
   const ganancia = ctx.createGain();
-  osc.type = "triangle";
+  osc.type = modoMusica === "boss" ? "sawtooth" : "triangle";
   osc.frequency.value = frecuenciaHz;
+  const pico = modoMusica === "boss" ? 0.04 : 0.05;
+  const duracionMs = modoMusica === "boss" ? DURACION_NOTA_BOSS_MS : DURACION_NOTA_AMBIENTE_MS;
   ganancia.gain.setValueAtTime(0.0001, ctx.currentTime);
-  ganancia.gain.exponentialRampToValueAtTime(0.05, ctx.currentTime + 0.05);
-  ganancia.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + DURACION_NOTA_AMBIENTE_MS / 1000);
+  ganancia.gain.exponentialRampToValueAtTime(pico, ctx.currentTime + 0.05);
+  ganancia.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duracionMs / 1000);
   osc.connect(ganancia);
   ganancia.connect(bus);
   osc.start();
-  osc.stop(ctx.currentTime + DURACION_NOTA_AMBIENTE_MS / 1000);
+  osc.stop(ctx.currentTime + duracionMs / 1000);
 }
 
 function reproducirPadAmbiente(frecuenciaHz, duracionMs) {
@@ -117,12 +125,23 @@ function reproducirPadAmbiente(frecuenciaHz, duracionMs) {
 }
 
 function agendarSiguienteNotaAmbiente() {
-  if (indicePatronAmbiente % PATRON_AMBIENTE_HZ.length === 0) {
-    reproducirPadAmbiente(FRECUENCIA_PAD_HZ, PATRON_AMBIENTE_HZ.length * DURACION_NOTA_AMBIENTE_MS);
+  const patron = modoMusica === "boss" ? PATRON_BOSS_HZ : PATRON_AMBIENTE_HZ;
+  const duracionNota = modoMusica === "boss" ? DURACION_NOTA_BOSS_MS : DURACION_NOTA_AMBIENTE_MS;
+  const padHz = modoMusica === "boss" ? FRECUENCIA_PAD_BOSS_HZ : FRECUENCIA_PAD_HZ;
+
+  if (indicePatronAmbiente % patron.length === 0) {
+    reproducirPadAmbiente(padHz, patron.length * duracionNota);
   }
-  reproducirNotaAmbiente(PATRON_AMBIENTE_HZ[indicePatronAmbiente % PATRON_AMBIENTE_HZ.length]);
+  reproducirNotaAmbiente(patron[indicePatronAmbiente % patron.length]);
   indicePatronAmbiente += 1;
-  setTimeout(agendarSiguienteNotaAmbiente, DURACION_NOTA_AMBIENTE_MS);
+  setTimeout(agendarSiguienteNotaAmbiente, duracionNota);
+}
+
+export function establecerModoMusica(modo) {
+  if (modo !== "ambiente" && modo !== "boss") return;
+  if (modoMusica === modo) return;
+  modoMusica = modo;
+  indicePatronAmbiente = 0;
 }
 
 export function iniciarAmbiente() {
