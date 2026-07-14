@@ -131,9 +131,10 @@ function renderBandeja(estadoTurno) {
   presupuestoEl.textContent = estadoTurno.presupuesto_restante;
   bandejaTitulo.textContent = TITULO_FASE[estadoTurno.fase] || "Bandeja — turno actual";
   listaTickets.innerHTML = "";
-  for (const ticket of estadoTurno.pendientes) {
+  estadoTurno.pendientes.forEach((ticket, indice) => {
     const li = document.createElement("li");
-    li.className = "papel";
+    li.className = "papel papel-entrando";
+    li.style.animationDelay = `${indice * 60}ms`;
     const info = document.createElement("span");
     info.textContent = `[⏱️ ${ticket.costo_tiempo}] ${ticket.motivo}`;
     const boton = document.createElement("button");
@@ -142,7 +143,7 @@ function renderBandeja(estadoTurno) {
     li.appendChild(info);
     li.appendChild(boton);
     listaTickets.appendChild(li);
-  }
+  });
   if (!estadoTurno.pendientes.some((t) => t.id === ticketActivoId)) {
     ticketActivoId = null;
     ticketActivoInfo.textContent = "Elige un ticket de la bandeja para empezar.";
@@ -261,9 +262,10 @@ async function submitTicket() {
 
 function renderPerks(perks) {
   listaPerks.innerHTML = "";
-  for (const perk of perks) {
+  perks.forEach((perk, indice) => {
     const li = document.createElement("li");
-    li.className = `papel papel-perk ${perk.equipado ? "equipado" : perk.desbloqueado ? "desbloqueado" : ""}`.trim();
+    li.className = `papel papel-perk papel-entrando ${perk.equipado ? "equipado" : perk.desbloqueado ? "desbloqueado" : ""}`.trim();
+    li.style.animationDelay = `${indice * 60}ms`;
 
     const info = document.createElement("span");
     const estado = perk.equipado ? "⭐ equipado" : perk.desbloqueado ? "✅ desbloqueado" : "🔒 bloqueado";
@@ -276,7 +278,7 @@ function renderPerks(perks) {
     li.appendChild(info);
     li.appendChild(boton);
     listaPerks.appendChild(li);
-  }
+  });
 
   const equipados = perks.filter((p) => p.equipado).map((p) => p.nombre);
   perksEquipadosMsg.textContent = equipados.length ? `Equipados: ${equipados.join(", ")}` : "Ningún perk equipado.";

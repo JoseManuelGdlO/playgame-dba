@@ -291,6 +291,41 @@ tr:nth-child(even) td {
   transform: rotate(0.3deg);
 }
 
+@keyframes entrada-papel-impar {
+  from {
+    opacity: 0;
+    transform: translateY(10px) rotate(-0.4deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotate(-0.4deg);
+  }
+}
+
+@keyframes entrada-papel-par {
+  from {
+    opacity: 0;
+    transform: translateY(10px) rotate(0.3deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotate(0.3deg);
+  }
+}
+
+.papel-entrando:nth-child(odd) {
+  animation: entrada-papel-impar 250ms ease both;
+}
+
+.papel-entrando:nth-child(even) {
+  animation: entrada-papel-par 250ms ease both;
+}
+
+.papel:hover {
+  transform: translateY(-3px) rotate(0deg);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+}
+
 .papel button {
   background: #3a3a2e;
   color: #e8dcc0;
