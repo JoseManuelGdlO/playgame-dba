@@ -55,6 +55,7 @@ struct EstadoJuegoView {
     presupuesto_restante: u32,
     pendientes: Vec<tickets::Ticket>,
     fase: FaseArco,
+    empresa: db::Company,
 }
 
 impl EstadoJuegoView {
@@ -66,6 +67,7 @@ impl EstadoJuegoView {
             presupuesto_restante: manejado.actual.presupuesto_restante,
             pendientes: manejado.actual.pendientes.clone(),
             fase: manejado.fase,
+            empresa: manejado.empresa,
         }
     }
 }
@@ -212,6 +214,7 @@ struct EstadoTurnoView {
     presupuesto_restante: u32,
     pendientes: Vec<tickets::Ticket>,
     fase: FaseArco,
+    empresa: db::Company,
 }
 
 impl From<&TurnoManejado> for EstadoTurnoView {
@@ -220,6 +223,7 @@ impl From<&TurnoManejado> for EstadoTurnoView {
             presupuesto_restante: manejado.actual.presupuesto_restante,
             pendientes: manejado.actual.pendientes.clone(),
             fase: manejado.fase,
+            empresa: manejado.empresa,
         }
     }
 }
@@ -274,6 +278,22 @@ fn vista_perks(estado: &economia::EstadoJugador) -> Vec<PerkConEstado> {
             equipado: estado.perks_equipados.contains(&perk.id),
         })
         .collect()
+}
+
+/// Vista de la lista de perks junto con el límite de slots del rango actual
+/// (Etapa 13/Plan 7: `EstadoJugador::max_slots`) — para que el Hub pueda
+/// mostrar "Perks equipados: X/Y" sin adivinar el límite en el frontend.
+#[derive(serde::Serialize)]
+struct PerksView {
+    perks: Vec<PerkConEstado>,
+    max_slots: usize,
+}
+
+fn vista_perks_con_slots(estado: &economia::EstadoJugador) -> PerksView {
+    PerksView {
+        perks: vista_perks(estado),
+        max_slots: estado.max_slots(),
+    }
 }
 
 #[tauri::command]
@@ -577,30 +597,30 @@ async fn cargar_partida(
 }
 
 #[tauri::command]
-fn catalogo_perks(jugador: tauri::State<'_, Jugador>) -> Vec<PerkConEstado> {
+fn catalogo_perks(jugador: tauri::State<'_, Jugador>) -> PerksView {
     let estado = jugador.0.lock().unwrap();
-    vista_perks(&estado)
+    vista_perks_con_slots(&estado)
 }
 
 #[tauri::command]
-fn desbloquear_perk(jugador: tauri::State<'_, Jugador>, id: String) -> Result<Vec<PerkConEstado>, String> {
+fn desbloquear_perk(jugador: tauri::State<'_, Jugador>, id: String) -> Result<PerksView, String> {
     let mut estado = jugador.0.lock().unwrap();
     estado.desbloquear_perk(perks::catalogo(), &id)?;
-    Ok(vista_perks(&estado))
+    Ok(vista_perks_con_slots(&estado))
 }
 
 #[tauri::command]
-fn equipar_perk(jugador: tauri::State<'_, Jugador>, id: String) -> Result<Vec<PerkConEstado>, String> {
+fn equipar_perk(jugador: tauri::State<'_, Jugador>, id: String) -> Result<PerksView, String> {
     let mut estado = jugador.0.lock().unwrap();
     estado.equipar_perk(&id)?;
-    Ok(vista_perks(&estado))
+    Ok(vista_perks_con_slots(&estado))
 }
 
 #[tauri::command]
-fn desequipar_perk(jugador: tauri::State<'_, Jugador>, id: String) -> Vec<PerkConEstado> {
+fn desequipar_perk(jugador: tauri::State<'_, Jugador>, id: String) -> PerksView {
     let mut estado = jugador.0.lock().unwrap();
     estado.desequipar_perk(&id);
-    vista_perks(&estado)
+    vista_perks_con_slots(&estado)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

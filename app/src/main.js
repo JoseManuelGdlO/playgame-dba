@@ -13,6 +13,7 @@ let btnCerrarScoring;
 let headerAppShell, dineroHubEl, reputacionHubEl;
 let rangoPerfilEl, progresoRangoActualTextoEl, progresoRangoSiguienteEl;
 let tooltipGlobal;
+let empresaNombreEl, empresaDescripcionEl;
 
 const RETRATOS = {
   generico: `<svg viewBox="0 0 8 8"><rect width="8" height="8" fill="#4a4a3a"/><rect x="2" y="1" width="4" height="3" fill="#8a8266"/><rect x="1" y="4" width="6" height="3" fill="#6b6b52"/><rect x="3" y="2" width="1" height="1" fill="#2a2a1f"/><rect x="5" y="2" width="1" height="1" fill="#2a2a1f"/></svg>`,
@@ -62,6 +63,19 @@ function mostrarPantalla(nombre) {
 
 const TITULO_FASE = {
   MiniBoss: "El Auditor de Cumplimiento quiere verte",
+};
+
+const EMPRESA_INFO = {
+  HospitalArcangel: {
+    nombre: "Hospital Arcángel",
+    descripcion:
+      "Hospital Arcángel es una cadena hospitalaria donde cada expediente pasa por al menos tres departamentos antes de llegar a quien realmente lo necesita. Nadie recuerda quién aprobó el sistema actual, pero todos coinciden en que cambiarlo tomaría más tiempo del que llevan usándolo.",
+  },
+  Postafeta: {
+    nombre: "Postafeta",
+    descripcion:
+      "Postafeta mueve paquetes por todo el país con una precisión sorprendente, considerando que nadie ha visto un manual de procesos desde hace años. Las decisiones importantes se toman en un canal de Slack administrado por un becario invisible llamado Kevin — todo viene firmado \"- Kevin\".",
+  },
 };
 
 const NOMBRE_RANGO = {
@@ -167,6 +181,11 @@ function seleccionarTicket(ticket) {
 function renderBandeja(estadoTurno) {
   presupuestoEl.textContent = estadoTurno.presupuesto_restante;
   bandejaTitulo.textContent = TITULO_FASE[estadoTurno.fase] || "Bandeja — turno actual";
+  const empresa = EMPRESA_INFO[estadoTurno.empresa];
+  if (empresa) {
+    empresaNombreEl.textContent = empresa.nombre;
+    empresaDescripcionEl.textContent = empresa.descripcion;
+  }
   listaTickets.innerHTML = "";
   estadoTurno.pendientes.forEach((ticket, indice) => {
     const li = document.createElement("li");
@@ -360,7 +379,7 @@ async function submitTicket() {
   }
 }
 
-function renderPerks(perks) {
+function renderPerks({ perks, max_slots }) {
   listaPerks.innerHTML = "";
   perks.forEach((perk, indice) => {
     const li = document.createElement("li");
@@ -387,26 +406,27 @@ function renderPerks(perks) {
   });
 
   const equipados = perks.filter((p) => p.equipado).map((p) => p.nombre);
-  perksEquipadosMsg.textContent = equipados.length ? `Equipados: ${equipados.join(", ")}` : "Ningún perk equipado.";
+  const resumen = `Perks equipados: ${equipados.length}/${max_slots}`;
+  perksEquipadosMsg.textContent = equipados.length ? `${resumen} — ${equipados.join(", ")}` : `${resumen} — ninguno equipado.`;
 }
 
 async function cargarPerks() {
-  const perks = await invoke("catalogo_perks");
-  renderPerks(perks);
+  const vista = await invoke("catalogo_perks");
+  renderPerks(vista);
 }
 
 async function accionPerk(perk) {
   try {
-    let perks;
+    let vista;
     if (perk.equipado) {
-      perks = await invoke("desequipar_perk", { id: perk.id });
+      vista = await invoke("desequipar_perk", { id: perk.id });
     } else if (perk.desbloqueado) {
-      perks = await invoke("equipar_perk", { id: perk.id });
+      vista = await invoke("equipar_perk", { id: perk.id });
     } else {
-      perks = await invoke("desbloquear_perk", { id: perk.id });
+      vista = await invoke("desbloquear_perk", { id: perk.id });
       setStatus("Perk desbloqueado.", "ok");
     }
-    renderPerks(perks);
+    renderPerks(vista);
   } catch (err) {
     setStatus(String(err), "error");
   }
@@ -445,6 +465,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   progresoRangoActualTextoEl = document.querySelector("#progreso-rango-actual-texto");
   progresoRangoSiguienteEl = document.querySelector("#progreso-rango-siguiente");
   tooltipGlobal = document.querySelector("#tooltip-global");
+  empresaNombreEl = document.querySelector("#empresa-nombre");
+  empresaDescripcionEl = document.querySelector("#empresa-descripcion");
 
   await mostrarMenu();
 

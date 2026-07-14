@@ -771,3 +771,41 @@ button,
 .pestana-bloqueada {
   cursor: not-allowed;
 }
+
+.tarjeta-equipados {
+  background: #f5e28a;
+  border-radius: 2px;
+  padding: 0.6rem 0.75rem;
+  box-shadow: 2px 3px 8px rgba(0, 0, 0, 0.3);
+  transform: rotate(-0.5deg);
+  margin-top: 0.9rem;
+}
+
+.tarjeta-equipados p {
+  margin: 0;
+  font-size: 0.6rem;
+  color: #2a2018;
+  line-height: 1.4;
+}
+
+.tarjeta-empresa {
+  background: #f7f0dc;
+  border-radius: 2px;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 0.9rem;
+  box-shadow: 2px 3px 8px rgba(0, 0, 0, 0.3);
+}
+
+.tarjeta-empresa-nombre {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #2a2018;
+  margin-bottom: 0.3rem;
+}
+
+.tarjeta-empresa-descripcion {
+  font-size: 0.65rem;
+  color: #5a4a35;
+  line-height: 1.5;
+  margin: 0;
+}
