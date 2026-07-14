@@ -108,6 +108,8 @@ function finalizarTutorial() {
 export function iniciarTutorial(retratoSvg, alFinalizar) {
   activo = true;
   esperandoCierreScoring = false;
+  clausulaObjetivoActual = null;
+  pasoActualAlEscribir = null;
   retratoMentorSvg = retratoSvg;
   callbackAlFinalizar = alFinalizar || null;
   permitirSiempre([SELECTOR_BOTON_SALTAR]);

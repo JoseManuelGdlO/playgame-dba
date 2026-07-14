@@ -56,6 +56,8 @@ const PRIORIDAD_INFO = {
 
 const DURACION_TRANSICION_MS = 250;
 
+const TICKET_TUTORIAL_ID = "hospital_reporte_pacientes_cardiologia";
+
 function alternarPantalla(el, mostrar) {
   if (mostrar) {
     el.classList.remove("oculto");
@@ -374,10 +376,13 @@ async function iniciarPartida() {
   pintarHubDesdeEstadoJuego(estadoJuego);
   await cargarPerks();
   setStatus("Partida nueva iniciada.", "ok");
-  btnSaltarTutorial.classList.remove("oculto");
-  iniciarTutorial(RETRATOS["El Mentor"], () => {
-    btnSaltarTutorial.classList.add("oculto");
-  });
+  const primerTicket = estadoJuego.pendientes && estadoJuego.pendientes[0];
+  if (primerTicket && primerTicket.id === TICKET_TUTORIAL_ID) {
+    btnSaltarTutorial.classList.remove("oculto");
+    iniciarTutorial(RETRATOS["El Mentor"], () => {
+      btnSaltarTutorial.classList.add("oculto");
+    });
+  }
 }
 
 async function cargarPartida() {
@@ -485,7 +490,7 @@ async function mostrarScoring(score) {
 async function submitTicket() {
   if (!ticketActivoId) {
     setStatus("Elige un ticket de la bandeja primero.", "error");
-    return;
+    return false;
   }
   setStatus("Enviando ticket...", "");
   try {
@@ -496,8 +501,10 @@ async function submitTicket() {
     mostrarScoring(score);
     setStatus(score.mensaje, score.pass ? "ok" : "error");
     await cargarTurno();
+    return true;
   } catch (err) {
     setStatus(String(err), "error");
+    return false;
   }
 }
 
@@ -693,9 +700,11 @@ window.addEventListener("DOMContentLoaded", async () => {
     notificarClicPlay();
   });
   document.querySelector("#btn-ejecutar-todas").addEventListener("click", runAllQueries);
-  document.querySelector("#btn-submit").addEventListener("click", () => {
-    submitTicket();
-    notificarClicEnviar();
+  document.querySelector("#btn-submit").addEventListener("click", async () => {
+    const exito = await submitTicket();
+    if (exito) {
+      notificarClicEnviar();
+    }
   });
   document.querySelector("#btn-cerrar-dia").addEventListener("click", cerrarDia);
   btnCerrarScoring.addEventListener("click", () => {
@@ -734,7 +743,6 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   btnSaltarTutorial.addEventListener("click", () => {
     saltarTutorial();
-    btnSaltarTutorial.classList.add("oculto");
   });
 
   document.querySelector("#tab-dashboard").addEventListener("click", () => {
