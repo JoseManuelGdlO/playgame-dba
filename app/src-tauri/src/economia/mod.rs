@@ -240,6 +240,22 @@ impl EstadoJugador {
         }
         multiplicador
     }
+
+    /// Intentos extra por ticket (Plan 17) por los perks equipados que dan
+    /// `BonoIntentos` — 0 si ninguno está activo. Se suma, no se multiplica
+    /// (a diferencia de dinero/reputación): dos perks de este tipo, si
+    /// alguna vez existieran, sumarían sus bonos en vez de componerse.
+    pub fn intentos_extra(&self, catalogo: &[Perk]) -> u32 {
+        let mut extra = 0;
+        for &id in &self.perks_equipados {
+            if let Some(perk) = catalogo.iter().find(|p| p.id == id) {
+                if let Efecto::BonoIntentos(bono) = perk.efecto {
+                    extra += bono;
+                }
+            }
+        }
+        extra
+    }
 }
 
 #[cfg(test)]
@@ -578,6 +594,22 @@ mod tests {
 
         estado.equipar_perk("buena_fama").unwrap();
         assert_eq!(estado.multiplicador_reputacion(catalogo), 1.2);
+    }
+
+    #[test]
+    fn intentos_extra_es_0_sin_el_perk_y_2_con_el_equipado() {
+        let catalogo = perks::catalogo();
+        let mut estado = EstadoJugador::default();
+        estado.perks_desbloqueados.push("segunda_opinion");
+
+        assert_eq!(
+            estado.intentos_extra(catalogo),
+            0,
+            "desbloqueado pero no equipado no debe aplicar"
+        );
+
+        estado.equipar_perk("segunda_opinion").unwrap();
+        assert_eq!(estado.intentos_extra(catalogo), 2, "equipado, +2 intentos");
     }
 
     #[test]

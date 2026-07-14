@@ -33,10 +33,12 @@ pub enum Categoria {
 pub enum Efecto {
     BonoDinero(f64),
     BonoReputacion(f64),
+    /// Intentos extra por ticket antes de perderlo (Plan 17).
+    BonoIntentos(u32),
     SinEfectoMecanico,
 }
 
-const CATALOGO: [Perk; 8] = [
+const CATALOGO: [Perk; 9] = [
     Perk {
         id: "instinto",
         nombre: "Instinto",
@@ -125,9 +127,21 @@ const CATALOGO: [Perk; 8] = [
         xp_minimo: 60,
         efecto: Efecto::SinEfectoMecanico,
     },
+    Perk {
+        id: "segunda_opinion",
+        nombre: "Segunda Opinión",
+        categoria: Categoria::ManosRapidas,
+        descripcion: "Antes de rendirte con un ticket difícil, tienes 2 intentos extra para corregir tu respuesta.",
+        costo_dinero: 300,
+        reputacion_minima: 5.0,
+        arquetipo_requerido: Arquetipo::Select,
+        xp_minimo: 30,
+        efecto: Efecto::BonoIntentos(2),
+    },
 ];
 
-/// Catálogo completo de perks (Etapa 13) — 8 perks, 2 por categoría.
+/// Catálogo completo de perks (Etapa 13) — 9 perks: 2 por categoría, salvo
+/// Manos Rápidas que tiene 3 (Plan 17 agrega "Segunda Opinión").
 pub fn catalogo() -> &'static [Perk] {
     &CATALOGO
 }
@@ -146,16 +160,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn catalogo_tiene_8_perks() {
-        assert_eq!(catalogo().len(), 8);
+    fn catalogo_tiene_9_perks() {
+        assert_eq!(catalogo().len(), 9, "8 originales + Segunda Opinion (Plan 17)");
     }
 
     #[test]
-    fn catalogo_tiene_2_perks_por_categoria() {
-        for categoria in [Categoria::Detective, Categoria::ManosRapidas, Categoria::BilleteraYFama, Categoria::Ritmo] {
+    fn catalogo_tiene_2_perks_por_categoria_salvo_manos_rapidas_con_3() {
+        for categoria in [Categoria::Detective, Categoria::BilleteraYFama, Categoria::Ritmo] {
             let cantidad = catalogo().iter().filter(|p| p.categoria == categoria).count();
             assert_eq!(cantidad, 2, "{categoria:?} debe tener exactamente 2 perks");
         }
+        let manos_rapidas = catalogo().iter().filter(|p| p.categoria == Categoria::ManosRapidas).count();
+        assert_eq!(manos_rapidas, 3, "ManosRapidas suma Segunda Opinion (Plan 17)");
     }
 
     #[test]
@@ -171,16 +187,24 @@ mod tests {
     }
 
     #[test]
-    fn solo_billetera_y_fama_tiene_efecto_mecanico_real() {
+    fn solo_billetera_y_fama_y_segunda_opinion_tienen_efecto_mecanico_real() {
         for perk in catalogo() {
             let tiene_efecto_real = !matches!(perk.efecto, Efecto::SinEfectoMecanico);
+            let debe_tener_efecto_real = perk.categoria == Categoria::BilleteraYFama || perk.id == "segunda_opinion";
             assert_eq!(
                 tiene_efecto_real,
-                perk.categoria == Categoria::BilleteraYFama,
-                "'{}' (categoría {:?}) no debe tener un efecto real fuera de Billetera y Fama",
+                debe_tener_efecto_real,
+                "'{}' (categoría {:?}) tiene un efecto real inesperado, o le falta uno (Plan 17: Segunda Opinion es la única excepción fuera de Billetera y Fama)",
                 perk.nombre,
                 perk.categoria
             );
         }
+    }
+
+    #[test]
+    fn segunda_opinion_da_2_intentos_extra() {
+        let perk = buscar("segunda_opinion").expect("segunda_opinion debe existir");
+        assert_eq!(perk.categoria, Categoria::ManosRapidas);
+        assert_eq!(perk.efecto, Efecto::BonoIntentos(2));
     }
 }
