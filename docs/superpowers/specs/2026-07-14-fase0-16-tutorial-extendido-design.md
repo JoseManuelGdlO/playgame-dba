@@ -11,17 +11,19 @@ Tras jugar el tutorial de Plan 15, el jugador reportó dos cosas: (1) incluso el
 
 Este plan solo toca Hospital Arcángel (la primera empresa, donde vive el tutorial y donde arranca todo jugador nuevo). Postafeta (la segunda empresa del arco) queda fuera de alcance — se alcanza más adelante, con más experiencia acumulada, y puede revisarse por separado si hace falta.
 
-## Escalón fácil: 3 tickets nuevos, antes de los 3 actuales
+## Escalón fácil: 3 tickets nuevos
 
-Un nivel de dificultad por debajo de "SELECT + WHERE + ORDER BY": solo elegir columnas de una tabla completa, sin filtrar ni ordenar. Se agregan al catálogo de `tickets/hospital_arcangel.rs`, todos con `arquetipos: vec![Arquetipo::Select]` (mismo rango Becario que ya tienen los tickets simples — no cambia `rango_requerido`), colocados **antes** de los 3 tickets simples existentes en el orden de declaración del catálogo (los tickets se sirven en orden de catálogo, sin aleatoriedad — Etapa/Plan 7).
+Un nivel de dificultad por debajo de "SELECT + WHERE + ORDER BY": solo elegir columnas de una tabla completa, sin filtrar ni ordenar. Se agregan al catálogo de `tickets/hospital_arcangel.rs`, todos con `arquetipos: vec![Arquetipo::Select]` (mismo rango Becario que ya tienen los tickets simples — no cambia `rango_requerido`).
 
 1. **`hospital_reporte_departamentos`** (este es el que enseña el tutorial — Tramo A) — *"Lista el nombre y el piso de cada departamento."* → `SELECT nombre, piso FROM departamentos`
 2. **`hospital_reporte_empleados_directorio`** — *"Lista el nombre y el puesto de cada empleado."* → `SELECT nombre, puesto FROM empleados`
 3. **`hospital_reporte_habitaciones_inventario`** — *"Lista el número y tipo de cada habitación."* → `SELECT numero, tipo FROM habitaciones`
 
+**Orden en el catálogo (importa: los tickets se sirven en orden de catálogo, sin aleatoriedad — Etapa/Plan 7, y un turno solo sirve `TAMANO_LOTE = 3` tickets a la vez — `turno/mod.rs`):** solo `hospital_reporte_departamentos` se coloca antes de `hospital_reporte_pacientes_cardiologia`; los otros dos tickets fáciles (`empleados_directorio`, `habitaciones_inventario`) se colocan **después** de los 3 tickets simples existentes, no antes. Colocar los 3 tickets fáciles seguidos antes de Cardiología sacaría a Cardiología del primer lote de 3 que ve un jugador nuevo, rompiendo el arranque del tutorial (encontrado en revisión de Plan 16, corregido antes de mergear). El orden final relevante para Becario es: `departamentos`, `pacientes_cardiologia`, `habitaciones_libres`, `pacientes_sin_alta`, `empleados_directorio`, `habitaciones_inventario`.
+
 Los tickets 2 y 3 son práctica libre — el tutorial no los guía, aparecen para el jugador después de terminar el tutorial (o para quien lo saltó), dando más repetición en este nivel antes de subir a WHERE/ORDER BY.
 
-Consecuencia directa de este reordenamiento: el primer ticket que recibe cualquier jugador nuevo deja de ser `hospital_reporte_pacientes_cardiologia` y pasa a ser `hospital_reporte_departamentos` — de ahí que el tutorial deba extenderse (ver abajo), y no solo su contenido.
+Consecuencia directa de este reordenamiento: el primer ticket que recibe cualquier jugador nuevo deja de ser `hospital_reporte_pacientes_cardiologia` y pasa a ser `hospital_reporte_departamentos`, con Cardiología como segundo ticket del mismo lote inicial — de ahí que el tutorial deba extenderse (ver abajo), y no solo su contenido.
 
 ## El tutorial pasa a 3 tramos continuos, sin fricción entre ellos
 
