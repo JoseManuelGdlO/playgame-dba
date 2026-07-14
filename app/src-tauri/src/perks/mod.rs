@@ -24,11 +24,11 @@ pub enum Categoria {
     Ritmo,
 }
 
-/// El efecto mecánico real de un perk. Solo Billetera y Fama tiene efecto
-/// hoy (Etapa 12/13) — Detective/Manos Rápidas/Ritmo dependen de sistemas
-/// que no existen todavía (consola SQL real con ERD/autocompletado, sistema
-/// de turnos) y usan `SinEfectoMecanico`: se pueden desbloquear/equipar de
-/// verdad, pero no hacen nada todavía.
+/// El efecto mecánico real de un perk. Solo Billetera y Fama, y "Segunda
+/// Opinión" (Plan 17), tienen efecto hoy — el resto de Detective/Manos
+/// Rápidas/Ritmo dependen de sistemas que no existen todavía (consola SQL
+/// real con ERD/autocompletado) y usan `SinEfectoMecanico`: se pueden
+/// desbloquear/equipar de verdad, pero no hacen nada todavía.
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
 pub enum Efecto {
     BonoDinero(f64),
