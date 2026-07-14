@@ -503,6 +503,10 @@ async function submitTicket() {
   setStatus("Enviando ticket...", "");
   try {
     const score = await invoke("resolver_ticket", { id: ticketActivoId, sql: sqlInput.value });
+    if (score.intentos_restantes) {
+      setStatus(score.mensaje, "error");
+      return false;
+    }
     actualizarDinero(score.dinero_total);
     actualizarReputacion(score.reputacion_total.toFixed(1));
     renderRango(score.rango_actual);

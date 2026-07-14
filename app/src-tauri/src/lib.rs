@@ -248,6 +248,12 @@ struct ScoreResult {
     ascendio: bool,
     rango_actual: tickets::Rango,
     mensaje: String,
+    /// Plan 17: `None` en cualquier resultado final (acierto, o intentos
+    /// agotados) — el frontend muestra el overlay de puntaje de siempre.
+    /// `Some(n)` con `n > 0` cuando la entrega falló pero quedan `n`
+    /// reintentos — el ticket sigue pendiente, no se cobra tiempo ni se paga
+    /// nada, y el frontend solo muestra un mensaje corto.
+    intentos_restantes: Option<u32>,
 }
 
 /// Vista combinada de un perk (Etapa 13): datos estáticos del catálogo +
@@ -322,6 +328,11 @@ async fn run_query(state: tauri::State<'_, AppState>, sql: String) -> Result<db:
     db::run_query(&pool, &sql).await.map_err(|e| e.to_string())
 }
 
+/// Cuántas veces puede fallar un jugador un ticket antes de perderlo del
+/// todo (Plan 17) — antes de cualquier perk. "Segunda Opinión" suma 2 más
+/// (`EstadoJugador::intentos_extra`).
+const INTENTOS_BASE: u32 = 3;
+
 #[tauri::command]
 async fn resolver_ticket(
     state: tauri::State<'_, AppState>,
@@ -352,6 +363,38 @@ async fn resolver_ticket(
         .await
         .map_err(|e| e.to_string())?;
 
+    // Plan 17: una entrega incorrecta con reintentos disponibles no cuenta
+    // como resuelta — se reembolsa el tiempo y el ticket vuelve a la bandeja
+    // sin cobrar nada, en vez de caer en el camino final de abajo.
+    if !evaluacion.correcta {
+        let estado = jugador.0.lock().unwrap();
+        let limite = INTENTOS_BASE + estado.intentos_extra(perks::catalogo());
+        let mut manejado = turno_state.0.lock().unwrap();
+        let usados = manejado.actual.registrar_intento(&id);
+        if usados < limite {
+            manejado.actual.reintentar(ticket);
+            return Ok(ScoreResult {
+                pass: false,
+                puntaje_correctitud: evaluacion.puntaje_correctitud,
+                puntaje_velocidad: evaluacion.puntaje_velocidad,
+                puntaje_practicas: evaluacion.puntaje_practicas,
+                puntaje_base: 0.0,
+                puntaje_final: 0.0,
+                comentario_mentor: evaluacion.comentario_mentor.map(str::to_string),
+                dinero_ganado: 0,
+                dinero_total: estado.dinero,
+                reputacion_ganada: 0.0,
+                reputacion_total: estado.reputacion,
+                xp_ganado: Vec::new(),
+                puede_ascender: estado.puede_ascender(),
+                ascendio: false,
+                rango_actual: estado.rango,
+                mensaje: format!("No es correcto todavía. Te quedan {} intento(s).", limite - usados),
+                intentos_restantes: Some(limite - usados),
+            });
+        }
+    }
+
     let mut estado = jugador.0.lock().unwrap();
     let multiplicador_dinero = estado.multiplicador_dinero(perks::catalogo());
     let multiplicador_reputacion = estado.multiplicador_reputacion(perks::catalogo());
@@ -359,6 +402,7 @@ async fn resolver_ticket(
     let ascendio = estado.aplicar_resultado(&resultado);
 
     let mut manejado = turno_state.0.lock().unwrap();
+    manejado.actual.limpiar_intentos(&id);
     manejado.actualizar_fase(ascendio, &mut estado);
     autoguardar(&dir.0, &estado, &manejado);
 
@@ -383,6 +427,7 @@ async fn resolver_ticket(
         } else {
             "El resultado no coincide con lo que pidió la solicitud. Revisa tu consulta.".to_string()
         },
+        intentos_restantes: None,
     })
 }
 
