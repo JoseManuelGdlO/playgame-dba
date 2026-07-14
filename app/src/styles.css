@@ -747,31 +747,18 @@ tr:nth-child(even) td {
   pointer-events: none;
 }
 
-.papel-perk {
-  position: relative;
-}
-
-.tooltip-perk {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 100%;
-  margin-top: 0.4rem;
+.tooltip-global {
+  position: fixed;
+  max-width: 240px;
   background: #f7f0dc;
   color: #2a2018;
   border-radius: 4px;
-  padding: 0.6rem 0.75rem;
+  padding: 0.5rem 0.75rem;
   font-size: 0.7rem;
   line-height: 1.4;
   box-shadow: 3px 4px 10px rgba(0, 0, 0, 0.4);
-  opacity: 0;
   pointer-events: none;
-  transition: opacity 150ms ease;
-  z-index: 20;
-}
-
-.papel-perk:hover .tooltip-perk {
-  opacity: 1;
+  z-index: 9999;
 }
 
 button,

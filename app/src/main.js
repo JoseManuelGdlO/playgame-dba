@@ -12,6 +12,7 @@ let btnMuteMusica, btnMuteEfectos;
 let btnCerrarScoring;
 let headerAppShell, dineroHubEl, reputacionHubEl;
 let rangoPerfilEl, progresoRangoActualTextoEl, progresoRangoSiguienteEl;
+let tooltipGlobal;
 
 const RETRATOS = {
   generico: `<svg viewBox="0 0 8 8"><rect width="8" height="8" fill="#4a4a3a"/><rect x="2" y="1" width="4" height="3" fill="#8a8266"/><rect x="1" y="4" width="6" height="3" fill="#6b6b52"/><rect x="3" y="2" width="1" height="1" fill="#2a2a1f"/><rect x="5" y="2" width="1" height="1" fill="#2a2a1f"/></svg>`,
@@ -365,6 +366,7 @@ function renderPerks(perks) {
     const li = document.createElement("li");
     li.className = `papel papel-perk papel-entrando ${perk.equipado ? "equipado" : perk.desbloqueado ? "desbloqueado" : ""}`.trim();
     li.style.animationDelay = `${indice * 60}ms`;
+    li.dataset.tooltip = perk.descripcion;
 
     const ICONO_EQUIPADO = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2l2.9 6.3 6.9.6-5.2 4.6 1.6 6.8L12 17l-6.2 3.3 1.6-6.8L2.2 8.9l6.9-.6z"/></svg>`;
     const ICONO_DESBLOQUEADO = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`;
@@ -379,13 +381,8 @@ function renderPerks(perks) {
     boton.textContent = perk.equipado ? "Desequipar" : perk.desbloqueado ? "Equipar" : "Desbloquear";
     boton.addEventListener("click", () => accionPerk(perk));
 
-    const tooltip = document.createElement("div");
-    tooltip.className = "tooltip-perk";
-    tooltip.textContent = perk.descripcion;
-
     li.appendChild(info);
     li.appendChild(boton);
-    li.appendChild(tooltip);
     listaPerks.appendChild(li);
   });
 
@@ -447,6 +444,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   rangoPerfilEl = document.querySelector("#rango-perfil");
   progresoRangoActualTextoEl = document.querySelector("#progreso-rango-actual-texto");
   progresoRangoSiguienteEl = document.querySelector("#progreso-rango-siguiente");
+  tooltipGlobal = document.querySelector("#tooltip-global");
 
   await mostrarMenu();
 
@@ -495,5 +493,28 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   document.querySelector("#tab-logros").addEventListener("click", () => {
     setStatus("Próximamente.", "");
+  });
+
+  document.addEventListener("mouseover", (evento) => {
+    const elConTooltip = evento.target.closest("[data-tooltip]");
+    if (elConTooltip) {
+      tooltipGlobal.textContent = elConTooltip.dataset.tooltip;
+      tooltipGlobal.classList.remove("oculto");
+    }
+  });
+
+  document.addEventListener("mousemove", (evento) => {
+    if (!tooltipGlobal.classList.contains("oculto")) {
+      tooltipGlobal.style.left = `${evento.clientX + 16}px`;
+      tooltipGlobal.style.top = `${evento.clientY + 16}px`;
+    }
+  });
+
+  document.addEventListener("mouseout", (evento) => {
+    const saliendoDe = evento.target.closest("[data-tooltip]");
+    const entrandoA = evento.relatedTarget && evento.relatedTarget.closest ? evento.relatedTarget.closest("[data-tooltip]") : null;
+    if (saliendoDe && saliendoDe !== entrandoA) {
+      tooltipGlobal.classList.add("oculto");
+    }
   });
 });
