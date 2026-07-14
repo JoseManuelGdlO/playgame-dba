@@ -301,6 +301,14 @@ fn turno_actual(turno: tauri::State<'_, Turno>) -> EstadoTurnoView {
     EstadoTurnoView::from(&*turno.0.lock().unwrap())
 }
 
+/// Cierra la aplicación por completo (menú principal y menú de pausa) —
+/// el autoguardado ya corre tras cada acción relevante, así que no hace
+/// falta guardar nada aquí antes de salir.
+#[tauri::command]
+fn salir_del_juego() {
+    std::process::exit(0);
+}
+
 /// Etapa 10, Plan 7: expone el rango vigente para que el frontend pinte el
 /// badge apenas carga, sin depender de haber resuelto un ticket primero.
 #[tauri::command]
@@ -636,6 +644,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             turno_actual,
             rango_actual,
+            salir_del_juego,
             run_query,
             resolver_ticket,
             cerrar_dia,

@@ -715,6 +715,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.querySelector("#btn-confirmar-agencia").addEventListener("click", confirmarTransicionAgencia);
   document.querySelector("#btn-iniciar-partida").addEventListener("click", iniciarPartida);
   document.querySelector("#btn-cargar-partida").addEventListener("click", cargarPartida);
+  document.querySelector("#btn-salir-juego-menu").addEventListener("click", () => invoke("salir_del_juego"));
+  document.querySelector("#btn-salir-juego-pausa").addEventListener("click", () => invoke("salir_del_juego"));
   document.querySelector("#btn-volver-hub").addEventListener("click", () => {
     ticketActivoId = null;
     ticketActivoInfo.textContent = "Elige un ticket de la bandeja para empezar.";
