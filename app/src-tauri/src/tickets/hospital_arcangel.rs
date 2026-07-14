@@ -33,9 +33,9 @@ pub(crate) fn catalogo() -> Vec<Ticket> {
         plantilla_reporte_simple(
             "hospital_reporte_pacientes_sin_alta",
             "Auditoría de Calidad",
-            "Auditoría de Calidad necesita confirmar cuántos pacientes siguen internados para su reporte semanal de ocupación.",
+            "Auditoría de Calidad necesita la lista de pacientes que siguen internados para su reporte semanal de ocupación.",
             "Lista el nombre y la fecha de ingreso de los pacientes que todavía no tienen fecha de alta, del ingreso más antiguo al más reciente.",
-            "SELECT nombre, fecha_ingreso FROM pacientes WHERE fecha_alta IS NULL ORDER BY fecha_ingreso, nombre",
+            "SELECT nombre, fecha_ingreso FROM pacientes WHERE fecha_alta IS NULL ORDER BY fecha_ingreso",
             10,
         ),
         plantilla_reporte_simple_sin_orden(
@@ -121,7 +121,13 @@ pub(crate) fn mini_boss() -> Vec<Ticket> {
             costo_tiempo: 25,
             arquetipos: vec![Arquetipo::Join],
             sql_dorada: "SELECT p.nombre, d.nombre AS departamento FROM pacientes p JOIN departamentos d ON p.departamento_id = d.id JOIN seguros s ON s.id = p.seguro_id WHERE s.aseguradora = 'Sin seguro' ORDER BY p.nombre".to_string(),
-            sql_inicial: None,
+            sql_inicial: Some(
+                "SELECT p.nombre AS paciente, d.nombre AS departamento\n\
+                 FROM pacientes p\n\
+                 JOIN departamentos d ON p.departamento_id = d.id\n\
+                 -- completa el filtro de \"sin seguro\" y el ORDER BY\n"
+                    .to_string(),
+            ),
             requiere_orden: true,
             peso_correctitud: 0.5,
             peso_velocidad: 0.25,
@@ -139,7 +145,13 @@ pub(crate) fn mini_boss() -> Vec<Ticket> {
             costo_tiempo: 25,
             arquetipos: vec![Arquetipo::Agregacion],
             sql_dorada: "SELECT tipo, COUNT(*) AS total FROM tratamientos GROUP BY tipo ORDER BY total DESC, tipo".to_string(),
-            sql_inicial: None,
+            sql_inicial: Some(
+                "SELECT tipo, COUNT(*) AS total\n\
+                 FROM tratamientos\n\
+                 GROUP BY tipo\n\
+                 -- completa el ORDER BY (más frecuente primero)\n"
+                    .to_string(),
+            ),
             requiere_orden: true,
             peso_correctitud: 0.5,
             peso_velocidad: 0.25,

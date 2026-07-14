@@ -56,10 +56,15 @@ struct EstadoJuegoView {
     pendientes: Vec<tickets::Ticket>,
     fase: FaseArco,
     empresa: db::Company,
+    /// Intentos restantes por id de ticket pendiente (Plan 17 + HUD).
+    intentos_restantes: std::collections::HashMap<String, u32>,
+    intentos_limite: u32,
 }
 
 impl EstadoJuegoView {
     fn construir(jugador: &economia::EstadoJugador, manejado: &TurnoManejado) -> Self {
+        let (intentos_restantes, intentos_limite) =
+            mapa_intentos_restantes(jugador, &manejado.actual);
         EstadoJuegoView {
             dinero: jugador.dinero,
             reputacion: jugador.reputacion,
@@ -68,6 +73,8 @@ impl EstadoJuegoView {
             pendientes: manejado.actual.pendientes.clone(),
             fase: manejado.fase,
             empresa: manejado.empresa,
+            intentos_restantes,
+            intentos_limite,
         }
     }
 }
@@ -215,16 +222,40 @@ struct EstadoTurnoView {
     pendientes: Vec<tickets::Ticket>,
     fase: FaseArco,
     empresa: db::Company,
+    intentos_restantes: std::collections::HashMap<String, u32>,
+    intentos_limite: u32,
 }
 
-impl From<&TurnoManejado> for EstadoTurnoView {
-    fn from(manejado: &TurnoManejado) -> Self {
-        EstadoTurnoView {
-            presupuesto_restante: manejado.actual.presupuesto_restante,
-            pendientes: manejado.actual.pendientes.clone(),
-            fase: manejado.fase,
-            empresa: manejado.empresa,
-        }
+/// Cuántas veces puede fallar un jugador un ticket antes de perderlo del
+/// todo (Plan 17) — antes de cualquier perk. "Segunda Opinión" suma 2 más
+/// (`EstadoJugador::intentos_extra`).
+const INTENTOS_BASE: u32 = 3;
+
+fn mapa_intentos_restantes(
+    jugador: &economia::EstadoJugador,
+    actual: &turno::EstadoTurno,
+) -> (std::collections::HashMap<String, u32>, u32) {
+    let limite = INTENTOS_BASE + jugador.intentos_extra(perks::catalogo());
+    let mapa = actual
+        .pendientes
+        .iter()
+        .map(|ticket| {
+            let usados = actual.intentos_usados.get(ticket.id).copied().unwrap_or(0);
+            (ticket.id.to_string(), limite.saturating_sub(usados))
+        })
+        .collect();
+    (mapa, limite)
+}
+
+fn vista_turno(jugador: &economia::EstadoJugador, manejado: &TurnoManejado) -> EstadoTurnoView {
+    let (intentos_restantes, intentos_limite) = mapa_intentos_restantes(jugador, &manejado.actual);
+    EstadoTurnoView {
+        presupuesto_restante: manejado.actual.presupuesto_restante,
+        pendientes: manejado.actual.pendientes.clone(),
+        fase: manejado.fase,
+        empresa: manejado.empresa,
+        intentos_restantes,
+        intentos_limite,
     }
 }
 
@@ -303,8 +334,13 @@ fn vista_perks_con_slots(estado: &economia::EstadoJugador) -> PerksView {
 }
 
 #[tauri::command]
-fn turno_actual(turno: tauri::State<'_, Turno>) -> EstadoTurnoView {
-    EstadoTurnoView::from(&*turno.0.lock().unwrap())
+fn turno_actual(
+    turno: tauri::State<'_, Turno>,
+    jugador: tauri::State<'_, Jugador>,
+) -> EstadoTurnoView {
+    let manejado = turno.0.lock().unwrap();
+    let estado = jugador.0.lock().unwrap();
+    vista_turno(&estado, &manejado)
 }
 
 /// Cierra la aplicación por completo (menú principal y menú de pausa) —
@@ -327,11 +363,6 @@ async fn run_query(state: tauri::State<'_, AppState>, sql: String) -> Result<db:
     let pool = state.0.lock().unwrap().clone();
     db::run_query(&pool, &sql).await.map_err(|e| e.to_string())
 }
-
-/// Cuántas veces puede fallar un jugador un ticket antes de perderlo del
-/// todo (Plan 17) — antes de cualquier perk. "Segunda Opinión" suma 2 más
-/// (`EstadoJugador::intentos_extra`).
-const INTENTOS_BASE: u32 = 3;
 
 #[tauri::command]
 async fn resolver_ticket(
@@ -359,9 +390,25 @@ async fn resolver_ticket(
     };
 
     let pool = state.0.lock().unwrap().clone();
-    let evaluacion = validation::evaluar_entrega(&pool, &sql, &ticket.sql_dorada, ticket.requiere_orden)
-        .await
-        .map_err(|e| e.to_string())?;
+    let evaluacion = match validation::evaluar_entrega(
+        &pool,
+        &sql,
+        &ticket.sql_dorada,
+        ticket.requiere_orden,
+    )
+    .await
+    {
+        Ok(evaluacion) => evaluacion,
+        Err(error) => {
+            // El ticket ya se había retirado para evitar doble premio. Si la
+            // evaluación falla (SQL inválido, error de Postgres, etc.), hay
+            // que devolverlo sin gastar un intento — si no, el jugador ve el
+            // error y al reintentar "ya no está pendiente".
+            let mut manejado = turno_state.0.lock().unwrap();
+            manejado.actual.reintentar(ticket);
+            return Err(format!("No se pudo evaluar tu query: {error}"));
+        }
+    };
 
     // Plan 17: una entrega incorrecta con reintentos disponibles no cuenta
     // como resuelta — se reembolsa el tiempo y el ticket vuelve a la bandeja
@@ -447,7 +494,7 @@ fn cerrar_dia(
         manejado.escalar_y_avanzar(&mut estado);
     }
     autoguardar(&dir.0, &estado, &manejado);
-    EstadoTurnoView::from(&*manejado)
+    vista_turno(&estado, &manejado)
 }
 
 /// Carga `company` (Etapa 11-G, Plan 8) y reconstruye el turno/catálogo para
@@ -522,9 +569,8 @@ async fn confirmar_transicion_agencia(
             let estado = jugador.0.lock().unwrap();
             let manejado = turno_state.0.lock().unwrap();
             autoguardar(&dir.0, &estado, &manejado);
+            Ok(vista_turno(&estado, &manejado))
         }
-
-        Ok(EstadoTurnoView::from(&*turno_state.0.lock().unwrap()))
     }
     .await;
 
@@ -683,6 +729,72 @@ fn desequipar_perk(jugador: tauri::State<'_, Jugador>, id: String) -> PerksView 
     vista_perks_con_slots(&estado)
 }
 
+/// Menú debug de playtest: ajusta dinero/reputación/XP y opcionalmente salta
+/// directo al Auditor (mini-boss) sin tener que grindar tickets.
+#[tauri::command]
+fn debug_set_estado(
+    jugador: tauri::State<'_, Jugador>,
+    turno_state: tauri::State<'_, Turno>,
+    dir: tauri::State<'_, DirectorioGuardado>,
+    dinero: Option<i64>,
+    reputacion: Option<f64>,
+    xp_select: Option<i64>,
+    xp_join: Option<i64>,
+    xp_agregacion: Option<i64>,
+    forzar_auditor: bool,
+) -> EstadoJuegoView {
+    let mut estado = jugador.0.lock().unwrap();
+    let mut manejado = turno_state.0.lock().unwrap();
+
+    if let Some(valor) = dinero {
+        estado.dinero = valor.max(0);
+    }
+    if let Some(valor) = reputacion {
+        estado.reputacion = valor.max(0.0);
+    }
+
+    fn poner_xp(
+        estado: &mut economia::EstadoJugador,
+        arquetipo: tickets::Arquetipo,
+        cantidad: Option<i64>,
+    ) {
+        let Some(cantidad) = cantidad else { return };
+        let cantidad = cantidad.max(0);
+        match estado
+            .xp_por_arquetipo
+            .iter_mut()
+            .find(|(a, _)| *a == arquetipo)
+        {
+            Some((_, existente)) => *existente = cantidad,
+            None => estado.xp_por_arquetipo.push((arquetipo, cantidad)),
+        }
+    }
+    poner_xp(&mut estado, tickets::Arquetipo::Select, xp_select);
+    poner_xp(&mut estado, tickets::Arquetipo::Join, xp_join);
+    poner_xp(&mut estado, tickets::Arquetipo::Agregacion, xp_agregacion);
+
+    if forzar_auditor {
+        estado.reputacion = estado
+            .reputacion
+            .max(economia::UMBRAL_ASCENSO_AUXILIAR);
+        estado.rango = tickets::Rango::AuxiliarDeSistemas;
+        let (turno_mini_boss, _) =
+            turno::EstadoTurno::nuevo(&tickets::mini_boss_hospital_arcangel(), 0);
+        manejado.actual = turno_mini_boss;
+        manejado.fase = FaseArco::MiniBoss;
+        manejado.empresa = db::Company::HospitalArcangel;
+    } else if estado.rango == tickets::Rango::Becario
+        && estado.reputacion >= economia::UMBRAL_ASCENSO_AUXILIAR
+    {
+        // Solo marca el rango; el jugador puede seguir en trabajo normal
+        // hasta que dispare el Auditor con el botón dedicado.
+        estado.rango = tickets::Rango::AuxiliarDeSistemas;
+    }
+
+    autoguardar(&dir.0, &estado, &manejado);
+    EstadoJuegoView::construir(&estado, &manejado)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
@@ -702,7 +814,8 @@ pub fn run() {
             desbloquear_perk,
             equipar_perk,
             desequipar_perk,
-            esquema_actual
+            esquema_actual,
+            debug_set_estado
         ])
         .setup(|app| {
             let handle = app.handle().clone();

@@ -99,7 +99,10 @@ pub struct EstadoJugador {
 /// condición — el mini-boss de la empresa (Etapa 11-G) queda fuera de
 /// alcance y se puede añadir como condición adicional en un plan posterior
 /// sin romper esta lógica (Plan 7).
-const UMBRAL_ASCENSO_AUXILIAR: f64 = 500.0;
+/// Playtest: ~0.5 rep por ticket Select. Umbral ~2.5 ≈ 4–5 tickets bien hechos
+/// en Hospital Arcángel antes del Auditor (los perks piden 3–7; algunos se
+/// desbloquean cerca del climax o justo después).
+pub(crate) const UMBRAL_ASCENSO_AUXILIAR: f64 = 2.5;
 
 impl EstadoJugador {
     /// Aplica el resultado de una entrega (Etapa 12): acumula dinero,
@@ -402,10 +405,10 @@ mod tests {
         let mut estado = EstadoJugador::default();
         assert!(!estado.puede_ascender());
 
-        estado.reputacion = 499.9;
+        estado.reputacion = 2.4;
         assert!(!estado.puede_ascender());
 
-        estado.reputacion = 500.0;
+        estado.reputacion = 2.5;
         assert!(estado.puede_ascender());
     }
 
@@ -676,7 +679,7 @@ mod tests {
             puntaje_base: 100.0,
             puntaje_final: 100.0,
             dinero_ganado: 100,
-            reputacion_ganada: 500.0,
+            reputacion_ganada: 2.5,
             xp_ganado: vec![],
         };
 
@@ -689,7 +692,7 @@ mod tests {
             puntaje_base: 100.0,
             puntaje_final: 100.0,
             dinero_ganado: 50,
-            reputacion_ganada: 10.0,
+            reputacion_ganada: 1.0,
             xp_ganado: vec![],
         };
         let ascendio_de_nuevo = estado.aplicar_resultado(&resultado_siguiente);
@@ -700,7 +703,7 @@ mod tests {
     fn aplicar_resultado_asciende_aunque_la_reputacion_salte_muy_por_encima_del_umbral() {
         // Guarda contra que alguien "arregle" `puede_ascender` cambiando el
         // `>=` por un `==`: un solo ticket con una ganancia de reputación
-        // grande (750.0, muy por encima del umbral de 500.0) debe seguir
+        // grande (muy por encima del umbral de 2.5) debe seguir
         // disparando el ascenso en esa misma entrega.
         let mut estado = EstadoJugador::default();
         let resultado = Resultado {

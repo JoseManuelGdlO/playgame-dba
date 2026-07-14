@@ -2,9 +2,13 @@ mod hospital_arcangel;
 mod postafeta;
 
 use postgresql_embedded::{PostgreSQL, Settings};
-use serde_json::Value;
+use serde_json::{json, Map, Value};
+use sqlparser::ast::{Expr, SelectItem, SetExpr, Statement};
+use sqlparser::dialect::PostgreSqlDialect;
+use sqlparser::parser::Parser;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{PgPool, Row};
+use std::collections::HashMap;
 
 /// Empresa activa: cada una vive en su propia base de datos dentro del mismo
 /// servidor Postgres embebido (Etapa 11-G: el esquema cambia por completo al
@@ -83,6 +87,11 @@ pub async fn load_company(pg: &PostgreSQL, company: Company) -> anyhow::Result<P
 /// El texto viene del jugador, así que sqlx exige envolverlo en `AssertSqlSafe`
 /// para reconocer explícitamente que no hay bind params posibles aquí: ejecutar
 /// SQL libre del jugador es el propósito del juego, no una vulnerabilidad.
+///
+/// Con proyección explícita, `row_to_json(ROW(q.*))` + rename evita que dos
+/// columnas `nombre` se pisen (como pasaba con `row_to_json(q)`).
+/// Con `SELECT *` (u otra proyección que no parseamos), usamos `row_to_json(q)`
+/// para conservar los nombres reales de Postgres en vez de `col_1`, `col_2`, …
 pub async fn run_query(pool: &PgPool, sql: &str) -> anyhow::Result<QueryResult> {
     let trimmed = sql.trim().trim_end_matches(';');
     if trimmed.is_empty() {
@@ -97,24 +106,120 @@ pub async fn run_query(pool: &PgPool, sql: &str) -> anyhow::Result<QueryResult> 
             .into_iter()
             .map(|row| {
                 let plan_line: String = row.try_get(0).unwrap_or_default();
-                serde_json::json!({ "QUERY PLAN": plan_line })
+                json!({ "QUERY PLAN": plan_line })
             })
             .collect()
     } else {
-        let wrapped = format!(
-            "SELECT coalesce(json_agg(row_to_json(query_result_row)), '[]'::json) AS result FROM ({trimmed}) AS query_result_row"
-        );
+        let nombres = nombres_proyeccion_unicos(trimmed);
+        let wrapped = if nombres.is_empty() {
+            format!(
+                "SELECT coalesce(json_agg(row_to_json(q)), '[]'::json) AS result FROM ({trimmed}) AS q"
+            )
+        } else {
+            format!(
+                "SELECT coalesce(json_agg(row_to_json(ROW(q.*))), '[]'::json) AS result FROM ({trimmed}) AS q"
+            )
+        };
         let row = sqlx::query(sqlx::AssertSqlSafe(wrapped))
             .fetch_one(pool)
             .await?;
         let value: Value = row.try_get(0)?;
-        match value {
+        let filas = match value {
             Value::Array(items) => items,
             other => vec![other],
+        };
+        if nombres.is_empty() {
+            filas
+        } else {
+            filas
+                .into_iter()
+                .map(|fila| renombrar_fila_anonima(fila, &nombres))
+                .collect()
         }
     };
 
     Ok(QueryResult { rows })
+}
+
+fn nombre_de_expr(expr: &Expr) -> String {
+    match expr {
+        Expr::Identifier(ident) => ident.value.clone(),
+        Expr::CompoundIdentifier(partes) => partes
+            .last()
+            .map(|p| p.value.clone())
+            .unwrap_or_else(|| "col".to_string()),
+        _ => "col".to_string(),
+    }
+}
+
+/// Nombres visibles de la proyección del SELECT, uniquificados (`nombre`,
+/// `nombre_2`, …) para no perder columnas homónimas al pintar/validar.
+fn nombres_proyeccion_unicos(sql: &str) -> Vec<String> {
+    let Ok(statements) = Parser::parse_sql(&PostgreSqlDialect {}, sql) else {
+        return Vec::new();
+    };
+    let Some(Statement::Query(query)) = statements.into_iter().next() else {
+        return Vec::new();
+    };
+    let SetExpr::Select(select) = *query.body else {
+        return Vec::new();
+    };
+
+    let mut crudos = Vec::new();
+    for item in &select.projection {
+        match item {
+            SelectItem::ExprWithAlias { alias, .. } => crudos.push(alias.value.clone()),
+            SelectItem::UnnamedExpr(expr) => crudos.push(nombre_de_expr(expr)),
+            // Wildcards / multi-alias: no conocemos un nombre estable aquí.
+            SelectItem::Wildcard(_)
+            | SelectItem::QualifiedWildcard(_, _)
+            | SelectItem::ExprWithAliases { .. } => {
+                return Vec::new();
+            }
+        }
+    }
+
+    uniquificar_nombres(crudos)
+}
+
+fn uniquificar_nombres(crudos: Vec<String>) -> Vec<String> {
+    let mut vistos: HashMap<String, usize> = HashMap::new();
+    let mut unicos = Vec::with_capacity(crudos.len());
+    for nombre in crudos {
+        let contador = vistos.entry(nombre.clone()).or_insert(0);
+        *contador += 1;
+        if *contador == 1 {
+            unicos.push(nombre);
+        } else {
+            unicos.push(format!("{nombre}_{contador}"));
+        }
+    }
+    unicos
+}
+
+fn renombrar_fila_anonima(fila: Value, nombres: &[String]) -> Value {
+    let Value::Object(mapa) = fila else {
+        return fila;
+    };
+
+    let mut ordenados: Vec<(usize, Value)> = mapa
+        .into_iter()
+        .filter_map(|(clave, valor)| {
+            let numero = clave.strip_prefix('f')?.parse::<usize>().ok()?;
+            Some((numero, valor))
+        })
+        .collect();
+    ordenados.sort_by_key(|(numero, _)| *numero);
+
+    let mut renombrada = Map::new();
+    for (indice, (_, valor)) in ordenados.into_iter().enumerate() {
+        let nombre = nombres
+            .get(indice)
+            .cloned()
+            .unwrap_or_else(|| format!("col_{}", indice + 1));
+        renombrada.insert(nombre, valor);
+    }
+    Value::Object(renombrada)
 }
 
 #[derive(serde::Serialize)]
@@ -318,6 +423,70 @@ mod tests {
             .iter()
             .any(|r| r.columna_origen == "cliente_id" && r.tabla_destino == "clientes");
         assert!(hacia_clientes);
+
+        pool.close().await;
+        pg.stop().await.expect("Postgres debe detenerse limpiamente");
+    }
+
+    #[test]
+    fn uniquificar_nombres_distingue_columnas_homonimas() {
+        assert_eq!(
+            uniquificar_nombres(vec!["nombre".into(), "nombre".into(), "id".into()]),
+            vec!["nombre", "nombre_2", "id"]
+        );
+    }
+
+    #[tokio::test]
+    async fn run_query_conserva_dos_columnas_llamadas_nombre() {
+        let pg = init_embedded_postgres().await.expect("Postgres embebido debe arrancar");
+        let pool = load_company(&pg, Company::HospitalArcangel)
+            .await
+            .expect("Hospital Arcángel debe cargar");
+
+        let resultado = run_query(
+            &pool,
+            "SELECT pa.nombre, de.nombre FROM pacientes pa \
+             INNER JOIN departamentos de ON de.id = pa.departamento_id \
+             WHERE seguro_id = 5",
+        )
+        .await
+        .expect("la query debe ejecutarse");
+
+        assert!(!resultado.rows.is_empty());
+        let primera = resultado.rows[0].as_object().expect("cada fila es un objeto");
+        assert!(primera.contains_key("nombre"), "debe conservar el nombre del paciente");
+        assert!(
+            primera.contains_key("nombre_2"),
+            "la segunda columna nombre no debe pisar a la primera"
+        );
+        assert_eq!(primera.len(), 2);
+
+        pool.close().await;
+        pg.stop().await.expect("Postgres debe detenerse limpiamente");
+    }
+
+    #[tokio::test]
+    async fn run_query_select_estrella_conserva_nombres_reales() {
+        let pg = init_embedded_postgres().await.expect("Postgres embebido debe arrancar");
+        let pool = load_company(&pg, Company::HospitalArcangel)
+            .await
+            .expect("Hospital Arcángel debe cargar");
+
+        let resultado = run_query(&pool, "SELECT * FROM habitaciones WHERE ocupada = false")
+            .await
+            .expect("la query debe ejecutarse");
+
+        assert!(!resultado.rows.is_empty());
+        let primera = resultado.rows[0].as_object().expect("cada fila es un objeto");
+        assert!(
+            primera.contains_key("numero") && primera.contains_key("tipo"),
+            "SELECT * debe mostrar nombres reales, no col_N; claves={:?}",
+            primera.keys().collect::<Vec<_>>()
+        );
+        assert!(
+            !primera.keys().any(|k| k.starts_with("col_")),
+            "no debe caer en col_1/col_2"
+        );
 
         pool.close().await;
         pg.stop().await.expect("Postgres debe detenerse limpiamente");

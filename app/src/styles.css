@@ -203,17 +203,39 @@ button:disabled {
 }
 
 #status-msg {
-  min-height: 1.2em;
+  position: fixed;
+  left: 50%;
+  bottom: 1.25rem;
+  transform: translateX(-50%);
+  z-index: 80;
+  min-height: 0;
+  max-width: min(420px, calc(100vw - 2rem));
   margin: 0;
-  padding: 0.6rem 1.5rem;
+  padding: 0.65rem 1rem;
+  background: #1a1b26;
+  border: 2px solid #2a2018;
+  border-radius: 6px;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.35);
+  color: #cdd6f4;
+  text-align: center;
+  pointer-events: none;
+}
+
+#status-msg:empty {
+  display: none;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
 }
 
 #status-msg.ok {
   color: #a6e3a1;
+  background: #1f3d1f;
 }
 
 #status-msg.error {
-  color: #f38ba8;
+  color: #f5d0d0;
+  background: #4a1c1c;
 }
 
 table {
@@ -414,6 +436,11 @@ tr:nth-child(even) td {
   display: flex;
   align-items: center;
   justify-content: center;
+  z-index: 5000;
+}
+
+#wiki-overlay {
+  z-index: 9600;
 }
 
 .oculto {
@@ -679,6 +706,27 @@ tr:nth-child(even) td {
   margin-top: 0.15rem;
 }
 
+.papel-ticket-intentos {
+  font-size: 0.6rem;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  color: #5a4a35;
+  margin-top: 0.2rem;
+}
+
+.ticket-info-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.ticket-intentos {
+  margin: 0;
+  font-size: 0.75rem;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  color: #cba6f7;
+}
+
 #btn-cerrar-dia {
   display: inline-flex;
   align-items: center;
@@ -893,6 +941,114 @@ button,
   stroke-width: 1.5;
 }
 
+.ventana-wiki {
+  width: min(920px, 92vw);
+  max-height: 88vh;
+}
+
+.wiki-cuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  max-height: calc(88vh - 48px);
+}
+
+.wiki-layout {
+  display: grid;
+  grid-template-columns: 168px 1fr;
+  gap: 0.85rem;
+  min-height: 0;
+  flex: 1;
+}
+
+.wiki-indice {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.wiki-indice-btn {
+  text-align: left;
+  background: #313244;
+  color: #cdd6f4;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.wiki-indice-btn:hover,
+.wiki-indice-btn.activo {
+  border-color: #89b4fa;
+  background: #45475a;
+}
+
+.wiki-articulo {
+  overflow-y: auto;
+  background: #11111b;
+  border-radius: 6px;
+  padding: 1rem 1.1rem;
+  color: #cdd6f4;
+  min-height: 280px;
+  max-height: 62vh;
+}
+
+.wiki-articulo h3 {
+  margin: 0 0 0.65rem;
+  font-size: 1.05rem;
+  color: #89b4fa;
+}
+
+.wiki-articulo p {
+  margin: 0 0 0.7rem;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.wiki-articulo ul {
+  margin: 0 0 0.7rem;
+  padding-left: 1.15rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.wiki-articulo code,
+.wiki-ejemplo {
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+}
+
+.wiki-ejemplo {
+  display: block;
+  white-space: pre-wrap;
+  background: #1e1e2e;
+  border-radius: 4px;
+  padding: 0.7rem 0.8rem;
+  margin: 0.5rem 0 0.85rem;
+  color: #a6e3a1;
+  border: 1px solid #313244;
+}
+
+.wiki-articulo .wiki-tip {
+  color: #f9e2af;
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+@media (max-width: 700px) {
+  .wiki-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .wiki-indice {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
 .caja-tabla {
   position: absolute;
   width: 220px;
@@ -1017,6 +1173,107 @@ button,
   top: 0.75rem;
   left: 0.75rem;
   z-index: 9500;
+  background: #2a2018;
+  color: #f3f0e6;
+  border: 2px solid #c9a876;
+  border-radius: 6px;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.35);
+}
+
+#btn-saltar-tutorial:hover {
+  background: #3d3224;
+}
+
+.debug-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.debug-overlay.oculto {
+  display: none;
+}
+
+.debug-panel {
+  background: #1e1e2e;
+  color: #cdd6f4;
+  border: 2px solid #cba6f7;
+  border-radius: 8px;
+  padding: 1rem 1.2rem;
+  min-width: 280px;
+  max-width: 90vw;
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  font-size: 0.8rem;
+}
+
+.debug-titulo {
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 0.25rem;
+}
+
+.debug-hint {
+  font-weight: 400;
+  opacity: 0.7;
+  font-size: 0.75rem;
+}
+
+.debug-panel label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.debug-panel input {
+  width: 7rem;
+  background: #11111b;
+  border: 1px solid #45475a;
+  color: #cdd6f4;
+  border-radius: 4px;
+  padding: 0.25rem 0.4rem;
+}
+
+.debug-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
+.debug-acciones button {
+  background: #313244;
+  color: #cdd6f4;
+  border: 1px solid #585b70;
+  border-radius: 4px;
+  padding: 0.35rem 0.6rem;
+  cursor: pointer;
+}
+
+.debug-acciones button:hover {
+  background: #45475a;
+}
+
+#debug-forzar-auditor {
+  background: #4a1c1c;
+  border-color: #a33;
+}
+
+.debug-nota {
+  margin: 0.35rem 0 0;
+  font-size: 0.68rem;
+  opacity: 0.75;
+  line-height: 1.35;
 }
 
 .hub-badge-pop {
@@ -1093,10 +1350,12 @@ button,
 
 .ticket-toast {
   position: fixed;
-  right: 1.25rem;
-  bottom: 1.25rem;
+  left: 50%;
+  bottom: 4.5rem;
+  right: auto;
+  transform: translateX(-50%);
   z-index: 60;
-  max-width: 260px;
+  max-width: min(320px, calc(100vw - 2rem));
   background: #1f3d1f;
   color: #f3f0e6;
   border: 2px solid #2a2018;
@@ -1106,6 +1365,8 @@ button,
   line-height: 1.4;
   box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.35);
   animation: toast-in 0.25s ease-out;
+  white-space: pre-line;
+  text-align: center;
 }
 
 .ticket-toast.es-fallo {

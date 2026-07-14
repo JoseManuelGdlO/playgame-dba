@@ -3,6 +3,20 @@ import { mostrarDialogo, ocultarDialogo, permitirSiempre } from "./dialogo.js";
 const NOMBRE_MENTOR = "El Mentor";
 const SELECTOR_BOTON_SALTAR = "#btn-saltar-tutorial";
 
+function botonSaltar() {
+  return document.querySelector(SELECTOR_BOTON_SALTAR);
+}
+
+function mostrarBotonSaltar() {
+  const boton = botonSaltar();
+  if (boton) boton.classList.remove("oculto");
+}
+
+function ocultarBotonSaltar() {
+  const boton = botonSaltar();
+  if (boton) boton.classList.add("oculto");
+}
+
 let activo = false;
 let esperandoCierreScoring = false;
 let clausulaObjetivoActual = null;
@@ -193,6 +207,7 @@ function finalizarTutorial() {
   manejarClicPlay = null;
   manejarCierreScoring = null;
   permitirSiempre([]);
+  ocultarBotonSaltar();
   ocultarDialogo();
   if (callbackAlFinalizar) callbackAlFinalizar();
 }
@@ -208,6 +223,7 @@ export function iniciarTutorial(retratoSvg, alFinalizar) {
   manejarClicPlay = null;
   manejarCierreScoring = null;
   permitirSiempre([SELECTOR_BOTON_SALTAR]);
+  mostrarBotonSaltar();
   paso0Bienvenida();
 }
 

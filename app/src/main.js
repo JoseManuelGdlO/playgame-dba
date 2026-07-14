@@ -21,6 +21,7 @@ import {
   notificarClicEnviar,
   notificarCierreScoring,
 } from "./tutorial.js";
+import { mostrarDialogo, ocultarDialogo } from "./dialogo.js";
 
 const { invoke } = window.__TAURI__.core;
 
@@ -39,6 +40,7 @@ let rangoPerfilEl, progresoRangoActualTextoEl, progresoRangoSiguienteEl;
 let tooltipGlobal;
 let empresaNombreEl, empresaDescripcionEl;
 let esquemaOverlay, esquemaLienzo, esquemaSvg;
+let wikiOverlay, wikiIndice, wikiArticulo;
 let posicionesActuales = {};
 let esquemaRelacionesActuales = [];
 let cajaArrastrando = null;
@@ -163,8 +165,10 @@ function actualizarReputacion(valorFormateado) {
 }
 
 let ticketActivoId = null;
+let ticketActivoArquetipos = [];
+let wikiArticuloActual = "select";
 
-const UMBRAL_ASCENSO_AUXILIAR = 500;
+const UMBRAL_ASCENSO_AUXILIAR = 2.5;
 
 /** @type {{ titulo: string, pass: boolean, deltaDinero: number, deltaRep: number, ascendio: boolean } | null} */
 let ultimoFeedback = null;
@@ -179,6 +183,14 @@ let ticketToastEl, bossBannerEl;
 let dineroHubPopEl, reputacionHubPopEl;
 let toastTimer = null;
 let bossBannerTimer = null;
+/** @type {Record<string, number>} */
+let intentosRestantesPorTicket = {};
+let intentosLimite = 3;
+let ticketIntentosEl;
+let enviandoTicket = false;
+/** @type {Set<string>} */
+let leccionesMentorMostradas = new Set();
+let btnSubmit;
 
 let empresaActual = null;
 
@@ -320,12 +332,285 @@ async function runAllQueries() {
 function seleccionarTicket(ticket) {
   ticketActivoId = ticket.id;
   ticketActivoMotivo = ticket.motivo || ticket.id;
+  ticketActivoArquetipos = Array.isArray(ticket.arquetipos) ? [...ticket.arquetipos] : [];
   ticketActivoInfo.textContent = `Motivo: ${ticket.motivo}\nSolicitud: ${ticket.solicitud}`;
+  actualizarEtiquetaIntentos(ticket.id);
   sqlInput.value = tutorialActivo() ? "" : (ticket.sql_inicial || "SELECT * FROM pacientes;");
   ticketRetrato.innerHTML = retratoParaSolicitante(ticket.solicitante);
   consolaTitulo.textContent = `query-path — ${ticket.id}`;
   mostrarPantalla("consola");
   notificarClicPrimerTicket();
+  if (!tutorialActivo()) {
+    mostrarLeccionesDelTicket(ticket);
+  }
+}
+
+function ticketTieneArquetipo(ticket, arquetipo) {
+  return Array.isArray(ticket.arquetipos) && ticket.arquetipos.includes(arquetipo);
+}
+
+function mostrarLeccionesDelTicket(ticket) {
+  const pasos = [];
+  if (ticketTieneArquetipo(ticket, "Join") && !leccionesMentorMostradas.has("Join")) {
+    pasos.push(leccionJoinPasos);
+  }
+  if (ticketTieneArquetipo(ticket, "Agregacion") && !leccionesMentorMostradas.has("Agregacion")) {
+    pasos.push(leccionAgregacionPasos);
+  }
+  if (pasos.length === 0) return;
+
+  const retrato = RETRATOS["El Mentor"] || RETRATOS.generico;
+  let indice = 0;
+  const correrSiguiente = () => {
+    if (indice >= pasos.length) {
+      ocultarDialogo();
+      return;
+    }
+    const fábrica = pasos[indice];
+    indice += 1;
+    fábrica(retrato, correrSiguiente);
+  };
+  correrSiguiente();
+}
+
+function leccionJoinPasos(retrato, alTerminar) {
+  leccionesMentorMostradas.add("Join");
+  mostrarDialogo(
+    retrato,
+    "El Mentor",
+    "Este ticket necesita un JOIN: une filas de dos tablas con una clave en común. INNER JOIN (o solo JOIN) deja solo las filas que coinciden en ambas. LEFT JOIN conserva todas las de la izquierda aunque no haya pareja a la derecha.",
+    {
+      permitir: ["#ticket-activo-info", "#sql-input"],
+      alContinuar: () => {
+        mostrarDialogo(
+          retrato,
+          "El Mentor",
+          "Ejemplo: FROM pacientes p JOIN departamentos d ON p.departamento_id = d.id. Si ambas tablas tienen una columna nombre, usa AS paciente / AS departamento para no pisarlas. Lee la solicitud, completa el filtro y el ORDER BY, prueba con ▶ Play y envía.",
+          {
+            permitir: ["#sql-input", "#btn-play", "#btn-submit", "#btn-ver-wiki", "#btn-ver-esquema", "#wiki-overlay", "#esquema-overlay"],
+            alContinuar: alTerminar,
+          }
+        );
+      },
+    }
+  );
+}
+
+function leccionAgregacionPasos(retrato, alTerminar) {
+  leccionesMentorMostradas.add("Agregacion");
+  mostrarDialogo(
+    retrato,
+    "El Mentor",
+    "Este ticket pide agregación: COUNT, SUM, AVG… con GROUP BY. GROUP BY agrupa filas que comparten un valor (por ejemplo el tipo) y la función calcula un número por grupo.",
+    {
+      permitir: ["#ticket-activo-info", "#sql-input"],
+      alContinuar: () => {
+        mostrarDialogo(
+          retrato,
+          "El Mentor",
+          "Ejemplo: SELECT tipo, COUNT(*) AS total FROM tratamientos GROUP BY tipo ORDER BY total DESC. Todo lo que va en el SELECT que no sea agregación debe ir también en el GROUP BY. Completa la query del ticket, pruébala y envíala.",
+          {
+            permitir: ["#sql-input", "#btn-play", "#btn-submit", "#btn-ver-wiki", "#btn-ver-esquema", "#wiki-overlay", "#esquema-overlay"],
+            alContinuar: alTerminar,
+          }
+        );
+      },
+    }
+  );
+}
+
+const WIKI_ARTICULOS = [
+  {
+    id: "select",
+    titulo: "SELECT",
+    html: `
+      <h3>SELECT — pedir columnas</h3>
+      <p>Lee filas de una tabla. Eliges qué columnas mostrar y de qué tabla.</p>
+      <code class="wiki-ejemplo">SELECT nombre, fecha_ingreso
+FROM pacientes;</code>
+      <p><code>*</code> trae todas las columnas. Mejor listar solo lo que pide el ticket.</p>
+      <p class="wiki-tip">Tip: en el hospital, empieza con SELECT y mira el resultado con ▶ Play antes de filtrar.</p>
+    `,
+  },
+  {
+    id: "where",
+    titulo: "WHERE",
+    html: `
+      <h3>WHERE — filtrar filas</h3>
+      <p>Deja solo las filas que cumplen una condición. Sin WHERE, ves toda la tabla.</p>
+      <code class="wiki-ejemplo">SELECT nombre, tipo
+FROM tratamientos
+WHERE tipo = 'cirugia';</code>
+      <ul>
+        <li><code>=</code>, <code>&lt;&gt;</code>, <code>&lt;</code>, <code>&gt;</code> comparan valores</li>
+        <li><code>AND</code> / <code>OR</code> combinan condiciones</li>
+        <li>Textos van entre comillas simples: <code>'urgencia'</code></li>
+      </ul>
+    `,
+  },
+  {
+    id: "order-by",
+    titulo: "ORDER BY",
+    html: `
+      <h3>ORDER BY — ordenar el resultado</h3>
+      <p>Ordena las filas del resultado. Muchos tickets exigen un orden concreto.</p>
+      <code class="wiki-ejemplo">SELECT nombre, fecha_ingreso
+FROM pacientes
+ORDER BY fecha_ingreso DESC, nombre;</code>
+      <ul>
+        <li><code>ASC</code> = ascendente (por defecto)</li>
+        <li><code>DESC</code> = descendente</li>
+        <li>Puedes ordenar por varias columnas, en ese orden de prioridad</li>
+      </ul>
+    `,
+  },
+  {
+    id: "join",
+    titulo: "JOIN",
+    html: `
+      <h3>JOIN — unir tablas</h3>
+      <p>Combina filas de dos tablas usando una clave en común (por ejemplo <code>departamento_id</code> ↔ <code>id</code>).</p>
+      <code class="wiki-ejemplo">SELECT p.nombre AS paciente, d.nombre AS departamento
+FROM pacientes p
+JOIN departamentos d ON p.departamento_id = d.id
+ORDER BY p.nombre;</code>
+      <ul>
+        <li><strong>INNER JOIN</strong> (o solo <code>JOIN</code>): solo filas con pareja en ambas tablas</li>
+        <li><strong>LEFT JOIN</strong>: todas las de la izquierda, aunque no haya pareja a la derecha</li>
+      </ul>
+      <p class="wiki-tip">Si ambas tablas tienen <code>nombre</code>, renómbralas con <code>AS</code> para no pisar columnas.</p>
+    `,
+  },
+  {
+    id: "group-by",
+    titulo: "GROUP BY",
+    html: `
+      <h3>GROUP BY — agrupar y contar</h3>
+      <p>Agrupa filas que comparten un valor y calcula un número por grupo con <code>COUNT</code>, <code>SUM</code>, <code>AVG</code>…</p>
+      <code class="wiki-ejemplo">SELECT tipo, COUNT(*) AS total
+FROM tratamientos
+GROUP BY tipo
+ORDER BY total DESC;</code>
+      <ul>
+        <li>Todo lo del <code>SELECT</code> que no sea agregación debe ir también en el <code>GROUP BY</code></li>
+        <li><code>COUNT(*)</code> cuenta filas del grupo; <code>COUNT(columna)</code> ignora NULLs</li>
+      </ul>
+    `,
+  },
+  {
+    id: "alias",
+    titulo: "Alias (AS)",
+    html: `
+      <h3>Alias — renombrar tablas y columnas</h3>
+      <p>Un alias acorta nombres y evita choques cuando dos tablas tienen la misma columna.</p>
+      <code class="wiki-ejemplo">SELECT p.nombre AS paciente, d.nombre AS departamento
+FROM pacientes AS p
+JOIN departamentos AS d ON p.departamento_id = d.id;</code>
+      <p>Después del alias, usa ese nombre corto en el resto de la consulta (<code>p.</code>, <code>d.</code>).</p>
+    `,
+  },
+  {
+    id: "intentos",
+    titulo: "Tickets e intentos",
+    html: `
+      <h3>Cómo entregar un ticket</h3>
+      <ol style="margin:0 0 0.7rem;padding-left:1.15rem;font-size:0.82rem;line-height:1.45">
+        <li>Lee el motivo y la solicitud (qué columnas y qué orden pide)</li>
+        <li>Consulta el <strong>esquema</strong> si no recuerdas las tablas</li>
+        <li>Escribe la query y pruébala con <strong>▶ Play</strong></li>
+        <li>Cuando el resultado cuadre, <strong>✓ Enviar ticket</strong></li>
+      </ol>
+      <p>Cada ticket tiene intentos limitados. Un fallo gasta un intento; si se acaban, el ticket se pierde.</p>
+      <p class="wiki-tip">Esta wiki y el esquema están en las pestañas del hub y también en la consola del ticket.</p>
+    `,
+  },
+];
+
+function articuloWikiParaTicket() {
+  if (ticketActivoArquetipos.includes("Join")) return "join";
+  if (ticketActivoArquetipos.includes("Agregacion")) return "group-by";
+  return "select";
+}
+
+function pintarIndiceWiki() {
+  if (!wikiIndice) return;
+  wikiIndice.innerHTML = "";
+  WIKI_ARTICULOS.forEach((art) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `wiki-indice-btn${art.id === wikiArticuloActual ? " activo" : ""}`;
+    btn.textContent = art.titulo;
+    btn.dataset.wiki = art.id;
+    btn.addEventListener("click", () => mostrarWiki(art.id));
+    wikiIndice.appendChild(btn);
+  });
+}
+
+function pintarArticuloWiki(id) {
+  const art = WIKI_ARTICULOS.find((a) => a.id === id) || WIKI_ARTICULOS[0];
+  wikiArticuloActual = art.id;
+  if (wikiArticulo) {
+    wikiArticulo.innerHTML = art.html;
+  }
+  pintarIndiceWiki();
+}
+
+function mostrarWiki(articuloId) {
+  const id = articuloId || articuloWikiParaTicket();
+  pintarArticuloWiki(id);
+  if (wikiOverlay) {
+    wikiOverlay.classList.remove("oculto");
+  }
+}
+
+function sincronizarModoBoss(fase) {
+  if (!pantallaHub || !bossBannerEl) return;
+
+  const enBoss = fase === "MiniBoss";
+  modoBossActivo = enBoss;
+  pantallaHub.classList.toggle("hub-boss", enBoss);
+  establecerModoMusica(enBoss ? "boss" : "ambiente");
+
+  if (!enBoss) {
+    bannerBossMostrado = false;
+    bossBannerEl.classList.add("oculto");
+    return;
+  }
+
+  if (!bannerBossMostrado) {
+    mostrarBannerBoss();
+  }
+}
+
+function mostrarBannerBoss() {
+  if (!bossBannerEl) return;
+
+  bannerBossMostrado = true;
+  bossBannerEl.classList.remove("oculto");
+  if (bossBannerTimer) clearTimeout(bossBannerTimer);
+  bossBannerTimer = setTimeout(() => {
+    bossBannerEl.classList.add("oculto");
+  }, 2800);
+}
+
+function actualizarEtiquetaIntentos(ticketId) {
+  if (!ticketIntentosEl) return;
+  if (!ticketId) {
+    ticketIntentosEl.textContent = "";
+    ticketIntentosEl.classList.add("oculto");
+    return;
+  }
+  const restantes = intentosRestantesPorTicket[ticketId] ?? intentosLimite;
+  ticketIntentosEl.textContent = `Intentos restantes: ${restantes} / ${intentosLimite}`;
+  ticketIntentosEl.classList.remove("oculto");
+}
+
+function sincronizarIntentosDesdeEstado(estadoTurno) {
+  intentosLimite = estadoTurno.intentos_limite ?? 3;
+  intentosRestantesPorTicket = { ...(estadoTurno.intentos_restantes || {}) };
+  if (ticketActivoId) {
+    actualizarEtiquetaIntentos(ticketActivoId);
+  }
 }
 
 function actualizarPanelArco({ empresa, fase, pendientesCount, presupuesto }) {
@@ -362,36 +647,6 @@ function actualizarPanelArco({ empresa, fase, pendientesCount, presupuesto }) {
   panelArcoTurnoEl.textContent = `Bandeja · ${pendientesCount} pendientes · presupuesto ${presupuesto}`;
 }
 
-function sincronizarModoBoss(fase) {
-  if (!pantallaHub || !bossBannerEl) return;
-
-  const enBoss = fase === "MiniBoss";
-  modoBossActivo = enBoss;
-  pantallaHub.classList.toggle("hub-boss", enBoss);
-  establecerModoMusica(enBoss ? "boss" : "ambiente");
-
-  if (!enBoss) {
-    bannerBossMostrado = false;
-    bossBannerEl.classList.add("oculto");
-    return;
-  }
-
-  if (!bannerBossMostrado) {
-    mostrarBannerBoss();
-  }
-}
-
-function mostrarBannerBoss() {
-  if (!bossBannerEl) return;
-
-  bannerBossMostrado = true;
-  bossBannerEl.classList.remove("oculto");
-  if (bossBannerTimer) clearTimeout(bossBannerTimer);
-  bossBannerTimer = setTimeout(() => {
-    bossBannerEl.classList.add("oculto");
-  }, 2800);
-}
-
 function mostrarPopBadge(el, texto, esNegativo = false) {
   if (!el) return;
   el.textContent = texto;
@@ -408,7 +663,8 @@ function mostrarToastTicket(feedback) {
   const lineaResultado = feedback.pass ? "Resuelto" : "Incorrecto";
   const partes = [`${lineaResultado} · ${feedback.titulo}`];
   if (feedback.pass) {
-    partes.push(`+$${feedback.deltaDinero} · +${feedback.deltaRep} rep`);
+    const repTxt = Number(feedback.deltaRep).toFixed(1);
+    partes.push(`+$${feedback.deltaDinero} · +${repTxt} rep`);
   }
   ticketToastEl.textContent = partes.join("\n");
   ticketToastEl.classList.toggle("es-fallo", !feedback.pass);
@@ -428,7 +684,8 @@ function aplicarFeedbackEnHub() {
     mostrarPopBadge(dineroHubPopEl, `+$${feedback.deltaDinero}`);
   }
   if (feedback.pass && feedback.deltaRep !== 0) {
-    mostrarPopBadge(reputacionHubPopEl, `+${feedback.deltaRep}`);
+    const repTxt = Number(feedback.deltaRep).toFixed(1);
+    mostrarPopBadge(reputacionHubPopEl, `+${repTxt}`);
   }
 
   if (feedback.ascendio) {
@@ -438,6 +695,7 @@ function aplicarFeedbackEnHub() {
 }
 
 function renderBandeja(estadoTurno) {
+  sincronizarIntentosDesdeEstado(estadoTurno);
   presupuestoEl.textContent = estadoTurno.presupuesto_restante;
   bandejaTitulo.textContent = TITULO_FASE[estadoTurno.fase] || "Bandeja — turno actual";
   empresaActual = estadoTurno.empresa;
@@ -474,8 +732,13 @@ function renderBandeja(estadoTurno) {
     etiquetaPrioridad.className = "papel-ticket-prioridad";
     etiquetaPrioridad.style.color = prioridad.color;
     etiquetaPrioridad.textContent = `● ${prioridad.etiqueta}`;
+    const intentosEl = document.createElement("div");
+    intentosEl.className = "papel-ticket-intentos";
+    const restantes = intentosRestantesPorTicket[ticket.id] ?? intentosLimite;
+    intentosEl.textContent = `Intentos ${restantes}/${intentosLimite}`;
     detalle.appendChild(info);
     detalle.appendChild(etiquetaPrioridad);
+    detalle.appendChild(intentosEl);
     li.appendChild(detalle);
 
     const boton = document.createElement("button");
@@ -512,7 +775,50 @@ function pintarHubDesdeEstadoJuego(estadoJuego) {
   renderRango(estadoJuego.rango);
   renderBandeja(estadoJuego);
   ticketActivoId = null;
+  actualizarEtiquetaIntentos(null);
   mostrarPantalla("hub");
+}
+
+function leerNumeroOpcional(inputEl) {
+  if (!inputEl || inputEl.value === "") return null;
+  const valor = Number(inputEl.value);
+  return Number.isFinite(valor) ? valor : null;
+}
+
+function alternarDebugOverlay(forzar) {
+  const overlay = document.querySelector("#debug-overlay");
+  if (!overlay) return;
+  const mostrar = forzar === true ? true : forzar === false ? false : overlay.classList.contains("oculto");
+  overlay.classList.toggle("oculto", !mostrar);
+  if (mostrar) {
+    const dineroInput = document.querySelector("#debug-dinero");
+    const repInput = document.querySelector("#debug-reputacion");
+    if (dineroInput && dineroHubEl) dineroInput.value = dineroHubEl.textContent || "0";
+    if (repInput && reputacionHubEl) repInput.value = reputacionHubEl.textContent || "0";
+  }
+}
+
+async function aplicarDebugEstado(forzarAuditor) {
+  try {
+    const estadoJuego = await invoke("debug_set_estado", {
+      dinero: leerNumeroOpcional(document.querySelector("#debug-dinero")),
+      reputacion: leerNumeroOpcional(document.querySelector("#debug-reputacion")),
+      xpSelect: leerNumeroOpcional(document.querySelector("#debug-xp-select")),
+      xpJoin: leerNumeroOpcional(document.querySelector("#debug-xp-join")),
+      xpAgregacion: leerNumeroOpcional(document.querySelector("#debug-xp-agregacion")),
+      forzarAuditor: Boolean(forzarAuditor),
+    });
+    bannerBossMostrado = false;
+    pintarHubDesdeEstadoJuego(estadoJuego);
+    await cargarPerks();
+    alternarDebugOverlay(false);
+    setStatus(
+      forzarAuditor ? "Debug: Auditor forzado." : "Debug: estado aplicado.",
+      "ok"
+    );
+  } catch (err) {
+    setStatus(String(err), "error");
+  }
 }
 
 async function mostrarMenu() {
@@ -523,6 +829,7 @@ async function mostrarMenu() {
 
 async function iniciarPartida() {
   const estadoJuego = await invoke("iniciar_partida");
+  leccionesMentorMostradas = new Set();
   pintarHubDesdeEstadoJuego(estadoJuego);
   await cargarPerks();
   setStatus("Partida nueva iniciada.", "ok");
@@ -649,11 +956,18 @@ async function submitTicket() {
     setStatus("Elige un ticket de la bandeja primero.", "error");
     return false;
   }
+  if (enviandoTicket) {
+    return false;
+  }
+  enviandoTicket = true;
+  if (btnSubmit) btnSubmit.disabled = true;
   setStatus("Enviando ticket...", "");
   try {
     const score = await invoke("resolver_ticket", { id: ticketActivoId, sql: sqlInput.value });
     if (score.intentos_restantes) {
       setStatus(score.mensaje, "error");
+      await cargarTurno();
+      actualizarEtiquetaIntentos(ticketActivoId);
       return false;
     }
     ultimoFeedback = {
@@ -672,7 +986,17 @@ async function submitTicket() {
     return true;
   } catch (err) {
     setStatus(String(err), "error");
+    // Tras un error de evaluación el backend ya reinsertó el ticket; refresca la bandeja.
+    try {
+      await cargarTurno();
+      actualizarEtiquetaIntentos(ticketActivoId);
+    } catch (_) {
+      /* ignore */
+    }
     return false;
+  } finally {
+    enviandoTicket = false;
+    if (btnSubmit) btnSubmit.disabled = false;
   }
 }
 
@@ -839,6 +1163,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   esquemaOverlay = document.querySelector("#esquema-overlay");
   esquemaLienzo = document.querySelector("#esquema-lienzo");
   esquemaSvg = document.querySelector("#esquema-svg");
+  wikiOverlay = document.querySelector("#wiki-overlay");
+  wikiIndice = document.querySelector("#wiki-indice");
+  wikiArticulo = document.querySelector("#wiki-articulo");
   pausaOverlay = document.querySelector("#pausa-overlay");
   pantallaMenu = document.querySelector("#pantalla-menu");
   appShell = document.querySelector("#app-shell");
@@ -869,6 +1196,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   bossBannerEl = document.querySelector("#boss-banner");
   dineroHubPopEl = document.querySelector("#dinero-hub-pop");
   reputacionHubPopEl = document.querySelector("#reputacion-hub-pop");
+  ticketIntentosEl = document.querySelector("#ticket-intentos");
 
   await mostrarMenu();
 
@@ -877,7 +1205,8 @@ window.addEventListener("DOMContentLoaded", async () => {
     notificarClicPlay();
   });
   document.querySelector("#btn-ejecutar-todas").addEventListener("click", runAllQueries);
-  document.querySelector("#btn-submit").addEventListener("click", async () => {
+  btnSubmit = document.querySelector("#btn-submit");
+  btnSubmit.addEventListener("click", async () => {
     const exito = await submitTicket();
     if (exito) {
       notificarClicEnviar();
@@ -897,7 +1226,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.querySelector("#btn-salir-juego-pausa").addEventListener("click", () => invoke("salir_del_juego"));
   document.querySelector("#btn-volver-hub").addEventListener("click", () => {
     ticketActivoId = null;
+    ticketActivoArquetipos = [];
     ticketActivoInfo.textContent = "Elige un ticket de la bandeja para empezar.";
+    actualizarEtiquetaIntentos(null);
     mostrarPantalla("hub");
   });
 
@@ -925,6 +1256,19 @@ window.addEventListener("DOMContentLoaded", async () => {
     saltarTutorial();
   });
 
+  document.addEventListener("keydown", (evento) => {
+    if (evento.key === "F2") {
+      evento.preventDefault();
+      alternarDebugOverlay();
+    }
+    if (evento.key === "Escape") {
+      alternarDebugOverlay(false);
+    }
+  });
+  document.querySelector("#debug-aplicar")?.addEventListener("click", () => aplicarDebugEstado(false));
+  document.querySelector("#debug-forzar-auditor")?.addEventListener("click", () => aplicarDebugEstado(true));
+  document.querySelector("#debug-cerrar")?.addEventListener("click", () => alternarDebugOverlay(false));
+
   document.querySelector("#tab-dashboard").addEventListener("click", () => {
     document.querySelector(".hub-columna-bandeja").scrollIntoView({ behavior: "smooth", block: "start" });
   });
@@ -944,6 +1288,14 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.querySelector("#btn-cerrar-esquema").addEventListener("click", () => {
     esquemaOverlay.classList.add("oculto");
   });
+
+  document.querySelector("#btn-ver-wiki").addEventListener("click", () => mostrarWiki());
+  document.querySelector("#tab-wiki").addEventListener("click", () => mostrarWiki("select"));
+  document.querySelector("#btn-cerrar-wiki").addEventListener("click", () => {
+    wikiOverlay.classList.add("oculto");
+  });
+  pintarIndiceWiki();
+  pintarArticuloWiki("select");
 
   document.addEventListener("mousemove", (evento) => {
     if (!cajaArrastrando) return;
