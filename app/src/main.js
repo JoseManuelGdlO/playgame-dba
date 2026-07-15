@@ -1419,10 +1419,16 @@ async function confirmarTransicionAgencia() {
   }
 }
 
+let animNumeroGen = 0;
+const animNumeroTokens = new WeakMap();
+
 function animarNumero(el, valorFinal, decimales) {
   const duracionMs = 600;
   const inicio = performance.now();
+  const token = ++animNumeroGen;
+  animNumeroTokens.set(el, token);
   function paso(ahora) {
+    if (animNumeroTokens.get(el) !== token) return; // superseded/cancelled
     const progreso = Math.min((ahora - inicio) / duracionMs, 1);
     el.textContent = (valorFinal * progreso).toFixed(decimales);
     if (progreso < 1) {
@@ -1432,6 +1438,11 @@ function animarNumero(el, valorFinal, decimales) {
     }
   }
   requestAnimationFrame(paso);
+  return token;
+}
+
+function cancelarAnimacionNumero(el) {
+  animNumeroTokens.set(el, ++animNumeroGen);
 }
 
 const DURACION_LINEA_SCORING_MS = 350;
@@ -1509,18 +1520,23 @@ async function mostrarScoring(score) {
   ].map((linea) => ({ ...linea, fila: linea.span.closest("p") }));
 
   for (const linea of [...metricas, ...recompensas]) {
+    cancelarAnimacionNumero(linea.span); // invalidate any leftover animation from a prior run
     linea.fila.classList.add("linea-oculta");
     linea.fila.classList.remove("es-pop-reward");
     linea.span.textContent = (0).toFixed(linea.decimales);
   }
 
-  aplicarSkinScoring(tier);
   scoringOverlay.classList.remove("oculto");
+
+  const fijarValorFinal = (linea) => {
+    cancelarAnimacionNumero(linea.span); // stop any in-flight rAF so it can't overwrite the final value
+    linea.fila.classList.remove("linea-oculta");
+    linea.span.textContent = Number(linea.valor).toFixed(linea.decimales);
+  };
 
   const revelarLinea = async (linea, { reward = false } = {}) => {
     if (scoringSkipRequested) {
-      linea.fila.classList.remove("linea-oculta");
-      linea.span.textContent = Number(linea.valor).toFixed(linea.decimales);
+      fijarValorFinal(linea);
       return;
     }
     linea.fila.classList.remove("linea-oculta");
@@ -1537,6 +1553,7 @@ async function mostrarScoring(score) {
   }
 
   if (!scoringSkipRequested) {
+    aplicarSkinScoring(tier);
     tituloEl.textContent = tituloPorTier(tier);
     tituloEl.className = score.pass ? "pulso" : "shake";
     if (tier === "fail") {
@@ -1556,9 +1573,9 @@ async function mostrarScoring(score) {
 
   if (scoringSkipRequested) {
     for (const linea of [...metricas, ...recompensas]) {
-      linea.fila.classList.remove("linea-oculta");
-      linea.span.textContent = Number(linea.valor).toFixed(linea.decimales);
+      fijarValorFinal(linea);
     }
+    aplicarSkinScoring(tier);
     tituloEl.textContent = tituloPorTier(tier);
     tituloEl.className = score.pass ? "pulso" : "shake";
     if (tier === "fail") {
