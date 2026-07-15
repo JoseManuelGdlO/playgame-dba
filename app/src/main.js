@@ -1440,15 +1440,56 @@ function esperar(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+let scoringSkipRequested = false;
+let scoringAnimando = false;
+
+function scoringVentanaEl() {
+  return document.querySelector("#scoring-overlay .ventana-terminal");
+}
+
+function aplicarSkinScoring(tier) {
+  const ventana = scoringVentanaEl();
+  if (!ventana) return;
+  ventana.classList.remove("scoring-excelente", "scoring-pass", "scoring-fail");
+  ventana.classList.add(
+    tier === "excelente" ? "scoring-excelente" : tier === "pass" ? "scoring-pass" : "scoring-fail"
+  );
+}
+
+function tituloPorTier(tier) {
+  if (tier === "excelente") return "✨ Query limpia";
+  if (tier === "pass") return "✅ Resuelto";
+  return "❌ Incorrecto";
+}
+
+async function esperarScoring(ms) {
+  const paso = 50;
+  let restante = ms;
+  while (restante > 0) {
+    if (scoringSkipRequested) return;
+    await esperar(Math.min(paso, restante));
+    restante -= paso;
+  }
+}
+
 async function mostrarScoring(score) {
   const tituloEl = document.querySelector("#scoring-titulo");
   const mentorEl = document.querySelector("#scoring-mentor");
+  const tier = clasificarTierScore(score);
 
-  btnCerrarScoring.disabled = true;
+  scoringSkipRequested = false;
+  scoringAnimando = true;
+  btnCerrarScoring.disabled = false; // allow skip via Cerrar
   tituloEl.textContent = "";
   tituloEl.className = "";
   mentorEl.textContent = "";
   scoringAscenso.textContent = "";
+  mentorEl.classList.add("linea-oculta");
+  scoringAscenso.classList.add("linea-oculta");
+
+  document.querySelectorAll("#scoring-overlay .scoring-metrica").forEach((p) => {
+    p.classList.remove("es-debil");
+  });
 
   const notaDineroEl = document.querySelector("#scoring-dinero-nota");
   if (notaDineroEl) {
@@ -1456,42 +1497,89 @@ async function mostrarScoring(score) {
       score.pass && score.dinero_ganado > 0 ? "(se paga al cerrar el día)" : "";
   }
 
-  const lineas = [
-    { span: document.querySelector("#scoring-correctitud"), valor: score.puntaje_correctitud, decimales: 0 },
-    { span: document.querySelector("#scoring-velocidad"), valor: score.puntaje_velocidad, decimales: 0 },
-    { span: document.querySelector("#scoring-practicas"), valor: score.puntaje_practicas, decimales: 0 },
+  const metricas = [
+    { span: document.querySelector("#scoring-correctitud"), valor: score.puntaje_correctitud, decimales: 0, clave: "correctitud" },
+    { span: document.querySelector("#scoring-velocidad"), valor: score.puntaje_velocidad, decimales: 0, clave: "velocidad" },
+    { span: document.querySelector("#scoring-practicas"), valor: score.puntaje_practicas, decimales: 0, clave: "practicas" },
+  ].map((linea) => ({ ...linea, fila: linea.span.closest("p") }));
+
+  const recompensas = [
     { span: document.querySelector("#scoring-dinero"), valor: score.dinero_ganado, decimales: 0 },
     { span: document.querySelector("#scoring-reputacion"), valor: score.reputacion_ganada, decimales: 1 },
   ].map((linea) => ({ ...linea, fila: linea.span.closest("p") }));
 
-  for (const linea of lineas) {
+  for (const linea of [...metricas, ...recompensas]) {
     linea.fila.classList.add("linea-oculta");
+    linea.fila.classList.remove("es-pop-reward");
+    linea.span.textContent = (0).toFixed(linea.decimales);
   }
 
+  aplicarSkinScoring(tier);
   scoringOverlay.classList.remove("oculto");
 
-  for (const linea of lineas) {
+  const revelarLinea = async (linea, { reward = false } = {}) => {
+    if (scoringSkipRequested) {
+      linea.fila.classList.remove("linea-oculta");
+      linea.span.textContent = Number(linea.valor).toFixed(linea.decimales);
+      return;
+    }
     linea.fila.classList.remove("linea-oculta");
+    if (reward) {
+      linea.fila.classList.add("es-pop-reward");
+    }
     animarNumero(linea.span, linea.valor, linea.decimales);
     sfxTick();
-    await esperar(DURACION_LINEA_SCORING_MS);
+    await esperarScoring(DURACION_LINEA_SCORING_MS);
+  };
+
+  for (const linea of metricas) {
+    await revelarLinea(linea);
+  }
+
+  if (!scoringSkipRequested) {
+    tituloEl.textContent = tituloPorTier(tier);
+    tituloEl.className = score.pass ? "pulso" : "shake";
+    if (tier === "fail") {
+      const debil = metricaMasDebil(score);
+      const filaDebil = metricas.find((m) => m.clave === debil)?.fila;
+      if (filaDebil) filaDebil.classList.add("es-debil");
+      sfxError();
+    } else {
+      sfxExito();
+    }
+    await esperarScoring(200);
+  }
+
+  for (const linea of recompensas) {
+    await revelarLinea(linea, { reward: true });
+  }
+
+  if (scoringSkipRequested) {
+    for (const linea of [...metricas, ...recompensas]) {
+      linea.fila.classList.remove("linea-oculta");
+      linea.span.textContent = Number(linea.valor).toFixed(linea.decimales);
+    }
+    tituloEl.textContent = tituloPorTier(tier);
+    tituloEl.className = score.pass ? "pulso" : "shake";
+    if (tier === "fail") {
+      const debil = metricaMasDebil(score);
+      const filaDebil = metricas.find((m) => m.clave === debil)?.fila;
+      if (filaDebil) filaDebil.classList.add("es-debil");
+    }
   }
 
   mentorEl.textContent = score.comentario_mentor || "";
-
-  tituloEl.textContent = score.pass ? "✅ Resuelto" : "❌ Incorrecto";
-  tituloEl.className = score.pass ? "pulso" : "shake";
-  if (score.pass) {
-    sfxExito();
-  } else {
-    sfxError();
-  }
-
+  mentorEl.classList.remove("linea-oculta");
   if (score.ascendio) {
     scoringAscenso.textContent = `¡Ascendiste a ${NOMBRE_RANGO[score.rango_actual] || score.rango_actual}! +1 slot de perk. Nuevos tickets disponibles.`;
+    scoringAscenso.classList.remove("linea-oculta");
     sfxAscenso();
+  } else {
+    scoringAscenso.classList.add("linea-oculta");
   }
 
+  scoringAnimando = false;
+  scoringSkipRequested = false;
   btnCerrarScoring.disabled = false;
 }
 
@@ -1946,12 +2034,23 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
   document.querySelector("#btn-cerrar-dia").addEventListener("click", cerrarDia);
   btnCerrarScoring.addEventListener("click", () => {
+    if (scoringAnimando) {
+      scoringSkipRequested = true;
+      return;
+    }
     scoringOverlay.classList.add("oculto");
     mostrarPantalla("hub");
     limpiarEstadoConsola();
     aplicarFeedbackEnHub();
     notificarCierreScoring();
     considerarSubtramaEmpleo();
+  });
+
+  scoringOverlay.addEventListener("click", (evento) => {
+    if (evento.target !== scoringOverlay) return;
+    if (scoringAnimando) {
+      scoringSkipRequested = true;
+    }
   });
   document.querySelector("#btn-confirmar-agencia").addEventListener("click", confirmarTransicionAgencia);
   document.querySelector("#btn-iniciar-partida").addEventListener("click", iniciarPartida);
