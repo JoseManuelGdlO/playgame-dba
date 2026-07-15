@@ -142,6 +142,85 @@ button:disabled {
   inset: 0;
 }
 
+#pantalla-consola .ventana-terminal {
+  transition: box-shadow 160ms ease, border-color 160ms ease;
+}
+
+#pantalla-consola .ventana-terminal.consola-querying {
+  box-shadow: 0 0 0 2px #c9a227;
+}
+
+#pantalla-consola .ventana-terminal.consola-ok {
+  box-shadow: 0 0 0 2px #5a8f5a;
+}
+
+#pantalla-consola .ventana-terminal.consola-error {
+  box-shadow: 0 0 0 2px #a33a3a;
+}
+
+#pantalla-consola .ventana-terminal.consola-alerta {
+  box-shadow: 0 0 0 2px #c9782a;
+}
+
+#pantalla-consola .ventana-terminal.consola-ok.consola-alerta {
+  box-shadow: 0 0 0 2px #c9782a, 0 0 0 4px rgba(90, 143, 90, 0.45);
+}
+
+#pantalla-consola .ventana-terminal.consola-error.consola-alerta {
+  box-shadow: 0 0 0 2px #c9782a, 0 0 0 4px rgba(163, 58, 58, 0.45);
+}
+
+.result-running {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: #c9a227;
+  font-style: italic;
+}
+
+#result-table.es-flash {
+  animation: result-flash 280ms ease;
+}
+
+@keyframes result-flash {
+  from { filter: brightness(1.35); }
+  to { filter: brightness(1); }
+}
+
+#result-table .resultado-bloque.es-stagger {
+  animation: resultado-entrada 280ms ease both;
+}
+
+@keyframes resultado-entrada {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+#result-table.es-shake-error {
+  animation: resultado-shake 320ms ease;
+}
+
+#result-table .resultado-error {
+  color: #ffb4b4;
+  font-weight: 600;
+  background: rgba(120, 30, 30, 0.35);
+  padding: 0.4rem 0.55rem;
+  border-left: 3px solid #c44;
+}
+
+@keyframes resultado-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+#ticket-retrato.retrato-reaccion-ok {
+  animation: pulso-exito 420ms ease;
+}
+
+#ticket-retrato.retrato-reaccion-error {
+  animation: resultado-shake 320ms ease;
+}
+
 #pantalla-menu h1 {
   font-family: "SF Mono", Menlo, Consolas, monospace;
   font-size: 2rem;
@@ -887,6 +966,34 @@ tr:nth-child(even) td {
 
 #scoring-overlay .ventana-terminal {
   animation: entrada-overlay 200ms ease;
+}
+
+#scoring-overlay .ventana-terminal.scoring-excelente {
+  box-shadow: 0 0 0 2px #c9a227, 0 8px 28px rgba(201, 162, 39, 0.35);
+}
+
+#scoring-overlay .ventana-terminal.scoring-pass {
+  box-shadow: 0 0 0 2px #5a8f5a;
+}
+
+#scoring-overlay .ventana-terminal.scoring-fail {
+  box-shadow: 0 0 0 2px #8a4040;
+  filter: saturate(0.75);
+}
+
+#scoring-overlay .scoring-metrica.es-debil {
+  color: #ffb4b4;
+  font-weight: 600;
+}
+
+.scoring-fila.scoring-recompensa.es-pop-reward {
+  animation: reward-pop 380ms ease;
+}
+
+@keyframes reward-pop {
+  0% { transform: scale(0.92); opacity: 0.4; }
+  60% { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); }
 }
 
 @keyframes entrada-overlay {
@@ -2274,6 +2381,15 @@ body.perk-rayos-x .esquema-linea-relacion {
 
 .ticket-toast.es-fallo {
   background: #4a1c1c;
+}
+
+.ticket-toast.es-excelente {
+  background: #3d3210;
+  border-color: #c9a227;
+}
+
+.ticket-toast.es-pass {
+  background: #1f3d1f;
 }
 
 @keyframes toast-in {
