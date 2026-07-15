@@ -225,6 +225,7 @@
 
             <section class="output">
               <h2>Resultado</h2>
+              <p id="result-running" class="result-running oculto" aria-live="polite">Ejecutando…</p>
               <div id="result-table"></div>
             </section>
           </div>
@@ -270,13 +271,13 @@
         </div>
         <div class="ventana-terminal-cuerpo scoring-panel">
           <h2 id="scoring-titulo">Resultado</h2>
-          <p>Correctitud: <span id="scoring-correctitud">0</span></p>
-          <p>Velocidad: <span id="scoring-velocidad">0</span></p>
-          <p>Buenas prácticas: <span id="scoring-practicas">0</span></p>
-          <p>💰 +<span id="scoring-dinero">0</span> <span id="scoring-dinero-nota" class="scoring-nota"></span></p>
-          <p>⭐ +<span id="scoring-reputacion">0</span></p>
-          <p id="scoring-mentor"></p>
-          <p id="scoring-ascenso"></p>
+          <p class="scoring-fila scoring-metrica">Correctitud: <span id="scoring-correctitud">0</span></p>
+          <p class="scoring-fila scoring-metrica">Velocidad: <span id="scoring-velocidad">0</span></p>
+          <p class="scoring-fila scoring-metrica">Buenas prácticas: <span id="scoring-practicas">0</span></p>
+          <p class="scoring-fila scoring-recompensa">💰 +<span id="scoring-dinero">0</span> <span id="scoring-dinero-nota" class="scoring-nota"></span></p>
+          <p class="scoring-fila scoring-recompensa">⭐ +<span id="scoring-reputacion">0</span></p>
+          <p id="scoring-mentor" class="scoring-beat"></p>
+          <p id="scoring-ascenso" class="scoring-beat"></p>
           <button id="btn-cerrar-scoring">Cerrar</button>
         </div>
       </div>
