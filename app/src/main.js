@@ -29,6 +29,19 @@ import {
   reiniciarSubtramaDebug,
 } from "./subtrama.js";
 import { retratoDelsyHabla } from "./sprites.js";
+import {
+  sincronizarPerksEquipados,
+  pintarPistaInstinto,
+  aplicarResaltadoInstintoEnEsquema,
+  registrarVocabularioEsquema,
+  empujarHistorialSql,
+  deshacerSql,
+  reiniciarHistorialSql,
+  avisoSqlSospechoso,
+  actualizarSugerenciasSql,
+  aplicarSugerenciaSql,
+  perkEquipado,
+} from "./perks-efectos.js";
 
 const { invoke } = window.__TAURI__.core;
 
@@ -553,10 +566,21 @@ function dividirSentencias(sql) {
   return sentencias.map((s) => s.trim()).filter((s) => s.length > 0);
 }
 
+async function confirmarSiSqlSospechoso(sql) {
+  const aviso = avisoSqlSospechoso(sql);
+  if (!aviso) return true;
+  return window.confirm(aviso);
+}
+
 async function runQuery() {
+  const sql = textoAEjecutar();
+  if (!(await confirmarSiSqlSospechoso(sql))) {
+    setStatus("Ejecución cancelada.", "");
+    return;
+  }
   setStatus("Ejecutando...", "");
   try {
-    const result = await invoke("run_query", { sql: textoAEjecutar() });
+    const result = await invoke("run_query", { sql });
     setStatus(`OK — ${result.rows.length} fila(s)`, "ok");
     renderResultados([{ rows: result.rows }]);
   } catch (err) {
@@ -569,6 +593,10 @@ async function runAllQueries() {
   const sentencias = dividirSentencias(sqlInput.value);
   if (sentencias.length === 0) {
     setStatus("No hay ninguna consulta que ejecutar.", "error");
+    return;
+  }
+  if (!(await confirmarSiSqlSospechoso(sqlInput.value))) {
+    setStatus("Ejecución cancelada.", "");
     return;
   }
   setStatus("Ejecutando...", "");
@@ -591,17 +619,25 @@ async function runAllQueries() {
   }
 }
 
-function seleccionarTicket(ticket) {
+async function seleccionarTicket(ticket) {
   ticketActivoId = ticket.id;
   ticketActivoMotivo = ticket.motivo || ticket.id;
   ticketActivoArquetipos = Array.isArray(ticket.arquetipos) ? [...ticket.arquetipos] : [];
   ticketActivoInfo.textContent = `Motivo: ${ticket.motivo}\nSolicitud: ${ticket.solicitud}`;
   actualizarEtiquetaIntentos(ticket.id);
-  sqlInput.value = tutorialActivo() ? "" : (ticket.sql_inicial || "SELECT * FROM pacientes;");
+  const sqlInicial = tutorialActivo() ? "" : (ticket.sql_inicial || "SELECT * FROM pacientes;");
+  sqlInput.value = sqlInicial;
+  reiniciarHistorialSql(sqlInicial);
   ticketRetrato.innerHTML = retratoParaSolicitante(ticket.solicitante);
   consolaTitulo.textContent = `query-path — ${ticket.id}`;
   mostrarPantalla("consola");
   notificarClicPrimerTicket();
+  try {
+    const tablas = await invoke("pista_instinto", { id: ticket.id });
+    pintarPistaInstinto(tablas);
+  } catch {
+    pintarPistaInstinto([]);
+  }
   if (!tutorialActivo()) {
     mostrarLeccionesDelTicket(ticket);
   }
@@ -1112,6 +1148,7 @@ async function iniciarPartida() {
   reiniciarSubtramaDebug();
   pintarHubDesdeEstadoJuego(estadoJuego);
   await cargarPerks();
+  await refrescarVocabularioEsquema();
   setStatus("Partida nueva iniciada.", "ok");
   const pendientes = estadoJuego.pendientes || [];
   const primerTicket = pendientes[0];
@@ -1138,6 +1175,7 @@ async function cargarPartida() {
     perksYaRenderizados = false;
     pintarHubDesdeEstadoJuego(estadoJuego);
     await cargarPerks();
+    await refrescarVocabularioEsquema();
     setStatus("Partida cargada.", "ok");
     considerarSubtramaEmpleo();
   } catch (err) {
@@ -1509,22 +1547,61 @@ function renderPerks({ perks, max_slots, ocultos = 0 }) {
 async function cargarPerks() {
   const vista = await invoke("catalogo_perks");
   renderPerks(vista);
+  sincronizarPerksEquipados(vista);
+  if (ticketActivoId && perkEquipado("instinto")) {
+    try {
+      const tablas = await invoke("pista_instinto", { id: ticketActivoId });
+      pintarPistaInstinto(tablas);
+    } catch {
+      pintarPistaInstinto([]);
+    }
+  } else {
+    pintarPistaInstinto([]);
+  }
 }
 
 async function accionPerk(perk) {
   try {
     let vista;
+    let mensaje = "";
     if (perk.equipado) {
       vista = await invoke("desequipar_perk", { id: perk.id });
+      mensaje = "Perk quitado.";
     } else if (perk.desbloqueado) {
       vista = await invoke("equipar_perk", { id: perk.id });
+      mensaje = "Perk equipado — ya aplica.";
     } else {
       vista = await invoke("desbloquear_perk", { id: perk.id });
-      setStatus("Perk desbloqueado.", "ok");
+      const auto = (vista.perks || []).find((p) => p.id === perk.id);
+      mensaje = auto?.equipado
+        ? "Perk comprado y equipado — ya aplica."
+        : "Perk comprado. Equípalo en un slot libre para usarlo.";
     }
     renderPerks(vista);
+    sincronizarPerksEquipados(vista);
+    setStatus(mensaje, "ok");
+    try {
+      await cargarTurno();
+    } catch {
+      /* sin turno activo (menú) */
+    }
+    if (ticketActivoId && perkEquipado("instinto")) {
+      const tablas = await invoke("pista_instinto", { id: ticketActivoId });
+      pintarPistaInstinto(tablas);
+    } else {
+      pintarPistaInstinto([]);
+    }
   } catch (err) {
     setStatus(String(err), "error");
+  }
+}
+
+async function refrescarVocabularioEsquema() {
+  try {
+    const esquema = await invoke("esquema_actual");
+    registrarVocabularioEsquema(esquema.tablas);
+  } catch {
+    /* DB aún no lista */
   }
 }
 
@@ -1615,7 +1692,9 @@ async function mostrarEsquema() {
     esquemaLienzo.appendChild(crearCajaTabla(tabla, posicion));
   });
 
+  registrarVocabularioEsquema(esquema.tablas);
   dibujarRelaciones(esquema.relaciones);
+  aplicarResaltadoInstintoEnEsquema(esquemaLienzo);
   esquemaOverlay.classList.remove("oculto");
 }
 
@@ -1699,6 +1778,15 @@ window.addEventListener("DOMContentLoaded", async () => {
     notificarClicPlay();
   });
   document.querySelector("#btn-ejecutar-todas").addEventListener("click", runAllQueries);
+  document.querySelector("#btn-deshacer-sql")?.addEventListener("click", () => {
+    if (deshacerSql(sqlInput)) {
+      setStatus("Deshecho (Red de Seguridad).", "ok");
+      const listaSug = document.querySelector("#sql-sugerencias");
+      actualizarSugerenciasSql(sqlInput, listaSug);
+    } else {
+      setStatus("Nada que deshacer.", "");
+    }
+  });
   btnSubmit = document.querySelector("#btn-submit");
   btnSubmit.addEventListener("click", async () => {
     const exito = await submitTicket();
@@ -1724,6 +1812,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     ticketActivoArquetipos = [];
     ticketActivoInfo.textContent = "Elige un ticket de la bandeja para empezar.";
     actualizarEtiquetaIntentos(null);
+    pintarPistaInstinto([]);
     mostrarPantalla("hub");
   });
 
@@ -1734,8 +1823,40 @@ window.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  sqlInput.addEventListener("keydown", () => sfxTecleo());
-  sqlInput.addEventListener("input", () => notificarSqlCambiado(sqlInput.value));
+  const listaSugerencias = document.querySelector("#sql-sugerencias");
+  sqlInput.addEventListener("keydown", (evento) => {
+    sfxTecleo();
+    if (!perkEquipado("piloto_automatico") || !listaSugerencias) return;
+    const abierta = !listaSugerencias.classList.contains("oculto");
+    const items = [...listaSugerencias.querySelectorAll("li")];
+    if (abierta && items.length > 0 && (evento.key === "Tab" || evento.key === "Enter")) {
+      const activa = listaSugerencias.querySelector("li.es-activa") || items[0];
+      evento.preventDefault();
+      aplicarSugerenciaSql(sqlInput, activa.dataset.sug);
+      listaSugerencias.classList.add("oculto");
+      return;
+    }
+    if (abierta && evento.key === "Escape") {
+      listaSugerencias.classList.add("oculto");
+    }
+  });
+  sqlInput.addEventListener("input", () => {
+    empujarHistorialSql(sqlInput.value);
+    notificarSqlCambiado(sqlInput.value);
+    actualizarSugerenciasSql(sqlInput, listaSugerencias);
+  });
+  listaSugerencias?.addEventListener("mousedown", (evento) => {
+    const li = evento.target.closest("li[data-sug]");
+    if (!li) return;
+    evento.preventDefault();
+    aplicarSugerenciaSql(sqlInput, li.dataset.sug);
+    listaSugerencias.classList.add("oculto");
+  });
+  document.addEventListener("click", (evento) => {
+    if (!evento.target.closest(".sql-editor-wrap")) {
+      listaSugerencias?.classList.add("oculto");
+    }
+  });
 
   btnMuteMusica.addEventListener("click", () => {
     const activa = alternarMusica();

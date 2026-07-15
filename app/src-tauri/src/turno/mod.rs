@@ -3,10 +3,8 @@ use crate::tickets::Ticket;
 /// Cuántos tickets recibe el jugador en cada turno (Etapa 11-A).
 const TAMANO_LOTE: usize = 3;
 
-/// Presupuesto de tiempo de turno, en las mismas unidades que
-/// `Ticket.costo_tiempo` (Etapa 11-A) — fijo por ahora; "Modo Turbo" (Plan 5)
-/// lo aumentará cuando tenga efecto mecánico real.
-const PRESUPUESTO_POR_TURNO: u32 = 100;
+/// Presupuesto de tiempo de turno base (Modo Turbo suma encima).
+pub const PRESUPUESTO_POR_TURNO: u32 = 100;
 
 /// Cuánta reputación se pierde por cada ticket que queda pendiente al cerrar
 /// el turno (Etapa 11-A/12) — valor de partida, sujeto a ajuste.
@@ -41,6 +39,14 @@ impl EstadoTurno {
     /// `indice_inicial`, y llena el presupuesto de tiempo. Devuelve el nuevo
     /// estado y el índice donde debe empezar el turno siguiente.
     pub fn nuevo(catalogo: &[Ticket], indice_inicial: usize) -> (Self, usize) {
+        Self::nuevo_con_presupuesto(catalogo, indice_inicial, PRESUPUESTO_POR_TURNO)
+    }
+
+    pub fn nuevo_con_presupuesto(
+        catalogo: &[Ticket],
+        indice_inicial: usize,
+        presupuesto: u32,
+    ) -> (Self, usize) {
         let tamano = TAMANO_LOTE.min(catalogo.len());
         let mut pendientes = Vec::with_capacity(tamano);
         // Plan 7: `catalogo` ya no es siempre el catálogo completo de la
@@ -57,7 +63,7 @@ impl EstadoTurno {
         }
         (
             EstadoTurno {
-                presupuesto_restante: PRESUPUESTO_POR_TURNO,
+                presupuesto_restante: presupuesto,
                 pendientes,
                 intentos_usados: std::collections::HashMap::new(),
             },
@@ -70,13 +76,12 @@ impl EstadoTurno {
         self.pendientes.iter().find(|t| t.id == id)
     }
 
-    /// Retira un ticket resuelto del lote (correcto o no — Etapa 11-A: el
-    /// costo de tiempo es por complejidad, no por si acertaste) y consume su
-    /// costo de tiempo del presupuesto.
-    pub fn resolver(&mut self, id: &str) -> Option<Ticket> {
+    /// Retira un ticket resuelto del lote y consume `costo` del presupuesto
+    /// (puede ser menor que `ticket.costo_tiempo` con Café Cargado).
+    pub fn resolver(&mut self, id: &str, costo: u32) -> Option<Ticket> {
         let posicion = self.pendientes.iter().position(|t| t.id == id)?;
         let ticket = self.pendientes.remove(posicion);
-        self.presupuesto_restante = self.presupuesto_restante.saturating_sub(ticket.costo_tiempo);
+        self.presupuesto_restante = self.presupuesto_restante.saturating_sub(costo);
         Some(ticket)
     }
 
@@ -99,15 +104,22 @@ impl EstadoTurno {
     /// ticket al presupuesto y lo reinserta en `pendientes` — usado cuando un
     /// intento falla pero todavía quedan reintentos disponibles, para que el
     /// ticket siga abierto sin haber costado nada de tiempo ni de pago.
-    pub fn reintentar(&mut self, ticket: Ticket) {
-        self.presupuesto_restante = self.presupuesto_restante.saturating_add(ticket.costo_tiempo);
+    pub fn reintentar(&mut self, ticket: Ticket, costo: u32) {
+        self.presupuesto_restante = self.presupuesto_restante.saturating_add(costo);
         self.pendientes.push(ticket);
     }
 
     /// Etapa 11-A: ¿ya no queda presupuesto para ningún ticket pendiente?
     /// (Vacío cuenta como agotado: no hay nada más que hacer este turno.)
     pub fn turno_agotado(&self) -> bool {
-        self.pendientes.iter().all(|t| t.costo_tiempo > self.presupuesto_restante)
+        self.turno_agotado_con_factor(1.0)
+    }
+
+    pub fn turno_agotado_con_factor(&self, factor_costo: f64) -> bool {
+        self.pendientes.iter().all(|t| {
+            let costo = crate::economia::costo_tiempo_efectivo(t.costo_tiempo, factor_costo);
+            costo > self.presupuesto_restante
+        })
     }
 
     /// Escala todos los tickets pendientes (turno agotado o cierre manual del
@@ -192,7 +204,7 @@ mod tests {
         let catalogo = catalogo_de_prueba();
         let (mut turno, _) = EstadoTurno::nuevo(&catalogo, 0);
 
-        let resuelto = turno.resolver("t2").expect("t2 debe estar pendiente");
+        let resuelto = turno.resolver("t2", 30).expect("t2 debe estar pendiente");
 
         assert_eq!(resuelto.id, "t2");
         assert_eq!(turno.presupuesto_restante, 70);
@@ -207,7 +219,7 @@ mod tests {
         let catalogo = catalogo_de_prueba();
         let (mut turno, _) = EstadoTurno::nuevo(&catalogo, 0);
 
-        assert!(turno.resolver("no_existe").is_none());
+        assert!(turno.resolver("no_existe", 30).is_none());
         assert_eq!(turno.pendientes.len(), 3, "no debe alterar el lote si el id no está pendiente");
     }
 
@@ -216,10 +228,10 @@ mod tests {
         let catalogo = catalogo_de_prueba();
         let (mut turno, _) = EstadoTurno::nuevo(&catalogo, 0);
 
-        let resuelto = turno.resolver("t2").expect("t2 debe estar pendiente");
+        let resuelto = turno.resolver("t2", 30).expect("t2 debe estar pendiente");
         assert_eq!(turno.presupuesto_restante, 70, "resolver ya descontó el costo de t2 (30)");
 
-        turno.reintentar(resuelto);
+        turno.reintentar(resuelto, 30);
 
         assert_eq!(turno.presupuesto_restante, 100, "reintentar debe reembolsar el costo de tiempo");
         assert_eq!(
@@ -274,9 +286,9 @@ mod tests {
     fn turno_agotado_es_true_si_no_quedan_pendientes() {
         let catalogo = catalogo_de_prueba();
         let (mut turno, _) = EstadoTurno::nuevo(&catalogo, 0);
-        turno.resolver("t1");
-        turno.resolver("t2");
-        turno.resolver("t3");
+        turno.resolver("t1", 30);
+        turno.resolver("t2", 30);
+        turno.resolver("t3", 30);
         assert!(turno.turno_agotado());
     }
 

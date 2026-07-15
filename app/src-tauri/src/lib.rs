@@ -189,7 +189,10 @@ impl TurnoManejado {
             jugador.aplicar_penalizacion(escalamiento.reputacion_perdida);
         }
         let elegibles = tickets::tickets_elegibles(&self.catalogo, jugador.rango);
-        let (nuevo_turno, siguiente_indice) = turno::EstadoTurno::nuevo(&elegibles, self.indice_siguiente);
+        let presupuesto = turno::PRESUPUESTO_POR_TURNO
+            .saturating_add(jugador.bono_presupuesto_turno(perks::catalogo()));
+        let (nuevo_turno, siguiente_indice) =
+            turno::EstadoTurno::nuevo_con_presupuesto(&elegibles, self.indice_siguiente, presupuesto);
         self.actual = nuevo_turno;
         self.indice_siguiente = siguiente_indice;
     }
@@ -203,11 +206,18 @@ impl TurnoManejado {
     /// cualquier otro caso, se comporta como antes (`escalar_y_avanzar`
     /// cuando el turno normal se agota o se vacía).
     fn actualizar_fase(&mut self, ascendio: bool, jugador: &mut economia::EstadoJugador) {
+        let factor = jugador.factor_costo_tiempo(perks::catalogo());
         if ascendio {
             // El tramo de Becario termina: se cobra antes del mini-boss.
             let nomina = sueldo_del_puesto(jugador, self.empresa);
             let _ = jugador.cobrar_sueldo_del_dia(nomina);
-            let (turno_mini_boss, _) = turno::EstadoTurno::nuevo(&tickets::mini_boss_hospital_arcangel(), 0);
+            let presupuesto = turno::PRESUPUESTO_POR_TURNO
+                .saturating_add(jugador.bono_presupuesto_turno(perks::catalogo()));
+            let (turno_mini_boss, _) = turno::EstadoTurno::nuevo_con_presupuesto(
+                &tickets::mini_boss_hospital_arcangel(),
+                0,
+                presupuesto,
+            );
             self.actual = turno_mini_boss;
             self.fase = FaseArco::MiniBoss;
         } else if self.fase == FaseArco::MiniBoss && self.actual.pendientes.is_empty() {
@@ -215,7 +225,7 @@ impl TurnoManejado {
             let _ = jugador.cobrar_sueldo_del_dia(nomina);
             self.fase = FaseArco::ArcoCompletado;
         } else if self.fase == FaseArco::TrabajoNormal
-            && (self.actual.pendientes.is_empty() || self.actual.turno_agotado())
+            && (self.actual.pendientes.is_empty() || self.actual.turno_agotado_con_factor(factor))
         {
             let nomina = sueldo_del_puesto(jugador, self.empresa);
             let _ = jugador.cobrar_sueldo_del_dia(nomina);
@@ -445,12 +455,21 @@ async fn resolver_ticket(
     // este mismo lock, así que solo la primera llamada puede obtener
     // `Some(ticket)` — la segunda ve `None` y falla aquí, antes de tocar
     // `Jugador` o correr validación/economía.
-    let ticket = {
+    let (ticket, costo_tiempo) = {
+        let estado = jugador.0.lock().unwrap();
+        let factor = estado.factor_costo_tiempo(perks::catalogo());
         let mut manejado = turno_state.0.lock().unwrap();
-        manejado
+        let base = manejado
             .actual
-            .resolver(&id)
-            .ok_or_else(|| format!("'{id}' ya fue resuelto o ya no está pendiente."))?
+            .buscar_pendiente(&id)
+            .map(|t| t.costo_tiempo)
+            .ok_or_else(|| format!("'{id}' ya fue resuelto o ya no está pendiente."))?;
+        let costo = economia::costo_tiempo_efectivo(base, factor);
+        let ticket = manejado
+            .actual
+            .resolver(&id, costo)
+            .ok_or_else(|| format!("'{id}' ya fue resuelto o ya no está pendiente."))?;
+        (ticket, costo)
     };
 
     let pool = state.0.lock().unwrap().clone();
@@ -469,7 +488,7 @@ async fn resolver_ticket(
             // que devolverlo sin gastar un intento — si no, el jugador ve el
             // error y al reintentar "ya no está pendiente".
             let mut manejado = turno_state.0.lock().unwrap();
-            manejado.actual.reintentar(ticket);
+            manejado.actual.reintentar(ticket, costo_tiempo);
             return Err(db::mensaje_error_para_jugador(&error.to_string()));
         }
     };
@@ -483,7 +502,7 @@ async fn resolver_ticket(
         let mut manejado = turno_state.0.lock().unwrap();
         let usados = manejado.actual.registrar_intento(&id);
         if usados < limite {
-            manejado.actual.reintentar(ticket);
+            manejado.actual.reintentar(ticket, costo_tiempo);
             return Ok(ScoreResult {
                 pass: false,
                 puntaje_correctitud: evaluacion.puntaje_correctitud,
@@ -782,24 +801,84 @@ async fn esquema_actual(state: tauri::State<'_, AppState>) -> Result<db::Esquema
 }
 
 #[tauri::command]
-fn desbloquear_perk(jugador: tauri::State<'_, Jugador>, id: String) -> Result<PerksView, String> {
+fn desbloquear_perk(
+    jugador: tauri::State<'_, Jugador>,
+    turno_state: tauri::State<'_, Turno>,
+    dir: tauri::State<'_, DirectorioGuardado>,
+    id: String,
+) -> Result<PerksView, String> {
     let mut estado = jugador.0.lock().unwrap();
+    let tenia_turbo = estado.perks_equipados.contains(&"modo_turbo");
     estado.desbloquear_perk(perks::catalogo(), &id)?;
+    let mut manejado = turno_state.0.lock().unwrap();
+    if !tenia_turbo && estado.perks_equipados.contains(&"modo_turbo") {
+        let bono = perks::buscar("modo_turbo")
+            .and_then(|p| match p.efecto {
+                perks::Efecto::BonoPresupuestoTurno(n) => Some(n),
+                _ => None,
+            })
+            .unwrap_or(0);
+        manejado.actual.presupuesto_restante =
+            manejado.actual.presupuesto_restante.saturating_add(bono);
+    }
+    autoguardar(&dir.0, &estado, &manejado);
     Ok(vista_perks_con_slots(&estado))
 }
 
 #[tauri::command]
-fn equipar_perk(jugador: tauri::State<'_, Jugador>, id: String) -> Result<PerksView, String> {
+fn equipar_perk(
+    jugador: tauri::State<'_, Jugador>,
+    turno_state: tauri::State<'_, Turno>,
+    dir: tauri::State<'_, DirectorioGuardado>,
+    id: String,
+) -> Result<PerksView, String> {
     let mut estado = jugador.0.lock().unwrap();
+    let ya_equipado = estado.perks_equipados.iter().any(|&e| e == id);
     estado.equipar_perk(&id)?;
+    let mut manejado = turno_state.0.lock().unwrap();
+    // Si acaba de equipar Modo Turbo a mitad de día, suma el bono una sola vez.
+    if !ya_equipado && id == "modo_turbo" {
+        if let Some(perks::Efecto::BonoPresupuestoTurno(bono)) =
+            perks::buscar("modo_turbo").map(|p| p.efecto)
+        {
+            manejado.actual.presupuesto_restante =
+                manejado.actual.presupuesto_restante.saturating_add(bono);
+        }
+    }
+    autoguardar(&dir.0, &estado, &manejado);
     Ok(vista_perks_con_slots(&estado))
 }
 
 #[tauri::command]
-fn desequipar_perk(jugador: tauri::State<'_, Jugador>, id: String) -> PerksView {
+fn desequipar_perk(
+    jugador: tauri::State<'_, Jugador>,
+    turno_state: tauri::State<'_, Turno>,
+    dir: tauri::State<'_, DirectorioGuardado>,
+    id: String,
+) -> PerksView {
     let mut estado = jugador.0.lock().unwrap();
     estado.desequipar_perk(&id);
+    let manejado = turno_state.0.lock().unwrap();
+    autoguardar(&dir.0, &estado, &manejado);
     vista_perks_con_slots(&estado)
+}
+
+/// Tablas sugeridas para el ticket si Instinto está equipado.
+#[tauri::command]
+fn pista_instinto(
+    jugador: tauri::State<'_, Jugador>,
+    turno_state: tauri::State<'_, Turno>,
+    id: String,
+) -> Vec<String> {
+    let estado = jugador.0.lock().unwrap();
+    if !estado.tiene_efecto(perks::catalogo(), perks::Efecto::DestacarTablasTicket) {
+        return Vec::new();
+    }
+    let manejado = turno_state.0.lock().unwrap();
+    let Some(ticket) = manejado.actual.buscar_pendiente(&id) else {
+        return Vec::new();
+    };
+    perks::tablas_mencionadas_en_sql(&ticket.sql_dorada)
 }
 
 /// Menú debug de playtest: ajusta dinero/reputación/XP y opcionalmente salta
@@ -887,6 +966,7 @@ pub fn run() {
             desbloquear_perk,
             equipar_perk,
             desequipar_perk,
+            pista_instinto,
             esquema_actual,
             debug_set_estado
         ])

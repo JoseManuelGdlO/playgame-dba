@@ -206,6 +206,8 @@ impl EstadoJugador {
         }
         self.dinero -= perk.costo_dinero;
         self.perks_desbloqueados.push(perk.id);
+        // Si hay hueco, se equipa solo: comprar sin equipar parecía que “no hacía nada”.
+        let _ = self.equipar_perk(perk.id);
         Ok(())
     }
 
@@ -283,6 +285,50 @@ impl EstadoJugador {
         }
         extra
     }
+
+    /// Factor sobre el costo de tiempo (Café Cargado). 1.0 sin perk; el más
+    /// bajo gana si hubiera varios.
+    pub fn factor_costo_tiempo(&self, catalogo: &[Perk]) -> f64 {
+        let mut factor: f64 = 1.0;
+        for &id in &self.perks_equipados {
+            if let Some(perk) = catalogo.iter().find(|p| p.id == id) {
+                if let Efecto::FactorCostoTiempo(f) = perk.efecto {
+                    factor = factor.min(f);
+                }
+            }
+        }
+        factor
+    }
+
+    /// Tiempo extra al abrir un turno nuevo (Modo Turbo).
+    pub fn bono_presupuesto_turno(&self, catalogo: &[Perk]) -> u32 {
+        let mut extra: u32 = 0;
+        for &id in &self.perks_equipados {
+            if let Some(perk) = catalogo.iter().find(|p| p.id == id) {
+                if let Efecto::BonoPresupuestoTurno(b) = perk.efecto {
+                    extra = extra.saturating_add(b);
+                }
+            }
+        }
+        extra
+    }
+
+    pub fn tiene_efecto(&self, catalogo: &[Perk], objetivo: Efecto) -> bool {
+        for &id in &self.perks_equipados {
+            if let Some(perk) = catalogo.iter().find(|p| p.id == id) {
+                if std::mem::discriminant(&perk.efecto) == std::mem::discriminant(&objetivo) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+}
+
+/// Costo de tiempo tras aplicar Café Cargado (mínimo 1).
+pub fn costo_tiempo_efectivo(base: u32, factor: f64) -> u32 {
+    ((base as f64) * factor).ceil().max(1.0) as u32
 }
 
 #[cfg(test)]
@@ -575,6 +621,10 @@ mod tests {
         estado.desbloquear_perk(catalogo, "buena_fama").expect("debe poder desbloquear");
         assert_eq!(estado.dinero, 0);
         assert!(estado.perks_desbloqueados.contains(&"buena_fama"));
+        assert!(
+            estado.perks_equipados.contains(&"buena_fama"),
+            "al comprar, si hay slot libre el perk se equipa solo"
+        );
 
         estado.dinero = 1000;
         estado.desbloquear_perk(catalogo, "buena_fama").expect("ya desbloqueado, no debe fallar");

@@ -206,10 +206,15 @@
                 <div class="ticket-info-texto">
                   <p id="ticket-activo-info">Elige un ticket de la bandeja para empezar.</p>
                   <p id="ticket-intentos" class="ticket-intentos oculto"></p>
+                  <div id="pista-instinto" class="pista-instinto oculto" aria-live="polite"></div>
                 </div>
               </div>
-              <textarea id="sql-input" spellcheck="false" placeholder="SELECT * FROM pacientes;"></textarea>
+              <div class="sql-editor-wrap">
+                <textarea id="sql-input" spellcheck="false" placeholder="SELECT * FROM pacientes;" autocomplete="off"></textarea>
+                <ul id="sql-sugerencias" class="sql-sugerencias oculto" role="listbox"></ul>
+              </div>
               <div class="actions">
+                <button id="btn-deshacer-sql" class="oculto" type="button" title="Deshacer (Red de Seguridad)">↩ Deshacer</button>
                 <button id="btn-play">▶ Play</button>
                 <button id="btn-ejecutar-todas">⏩ Ejecutar todas</button>
                 <button id="btn-submit">✓ Enviar ticket</button>

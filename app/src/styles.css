@@ -1760,6 +1760,84 @@ button,
   stroke-width: 1.5;
 }
 
+body.perk-rayos-x .esquema-linea-relacion {
+  stroke: #f9e2af;
+  stroke-width: 3.5;
+  filter: drop-shadow(0 0 3px rgba(249, 226, 175, 0.55));
+}
+
+.pista-instinto {
+  margin: 0.45rem 0 0;
+  padding: 0.45rem 0.55rem;
+  background: rgba(166, 227, 161, 0.12);
+  border: 1px solid rgba(166, 227, 161, 0.45);
+  border-radius: 4px;
+  font-size: 0.82rem;
+  color: #a6e3a1;
+}
+
+.pista-instinto-etiqueta {
+  display: block;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.8;
+  margin-bottom: 0.25rem;
+}
+
+.pista-instinto-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.pista-instinto-tag {
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  padding: 0.15rem 0.45rem;
+  background: rgba(166, 227, 161, 0.2);
+  border-radius: 3px;
+}
+
+.caja-tabla.es-pista-instinto {
+  border: 2px solid #a6e3a1;
+  box-shadow: 0 0 0 2px rgba(166, 227, 161, 0.35), 0 3px 8px rgba(0, 0, 0, 0.4);
+}
+
+.sql-editor-wrap {
+  position: relative;
+}
+
+.sql-sugerencias {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 20;
+  margin: 0;
+  padding: 0.25rem 0;
+  list-style: none;
+  max-height: 160px;
+  overflow-y: auto;
+  background: #11111b;
+  border: 1px solid #585b70;
+  border-radius: 4px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+}
+
+.sql-sugerencias li {
+  padding: 0.35rem 0.7rem;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  color: #a6e3a1;
+  cursor: pointer;
+}
+
+.sql-sugerencias li:hover,
+.sql-sugerencias li.es-activa {
+  background: #313244;
+}
+
 .ventana-wiki {
   width: min(920px, 92vw);
   max-height: 88vh;
