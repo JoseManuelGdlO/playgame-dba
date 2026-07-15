@@ -1513,7 +1513,9 @@ async function submitTicket() {
       setStatus(score.mensaje, "error");
       await cargarTurno();
       actualizarEtiquetaIntentos(ticketActivoId);
+      setEstadoConsola("error");
       refrescarAlertaConsola();
+      reaccionRetrato("error");
       return false;
     }
     const tier = clasificarTierScore(score);
@@ -1528,6 +1530,7 @@ async function submitTicket() {
     actualizarDinero(score.dinero_total, score.dinero_pendiente);
     actualizarReputacion(score.reputacion_total.toFixed(1));
     renderRango(score.rango_actual);
+    setEstadoConsola("idle");
     mostrarScoring(score);
     setStatus(score.mensaje, score.pass ? "ok" : "error");
     await cargarTurno();
@@ -1535,6 +1538,9 @@ async function submitTicket() {
     return true;
   } catch (err) {
     setStatus(String(err), "error");
+    setEstadoConsola("error");
+    refrescarAlertaConsola();
+    reaccionRetrato("error");
     // Tras un error de evaluación el backend ya reinsertó el ticket; refresca la bandeja.
     try {
       await cargarTurno();
@@ -1942,6 +1948,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   btnCerrarScoring.addEventListener("click", () => {
     scoringOverlay.classList.add("oculto");
     mostrarPantalla("hub");
+    limpiarEstadoConsola();
     aplicarFeedbackEnHub();
     notificarCierreScoring();
     considerarSubtramaEmpleo();
