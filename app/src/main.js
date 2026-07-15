@@ -1458,6 +1458,12 @@ function scoringVentanaEl() {
   return document.querySelector("#scoring-overlay .ventana-terminal");
 }
 
+function limpiarSkinScoring() {
+  const ventana = scoringVentanaEl();
+  if (!ventana) return;
+  ventana.classList.remove("scoring-excelente", "scoring-pass", "scoring-fail");
+}
+
 function aplicarSkinScoring(tier) {
   const ventana = scoringVentanaEl();
   if (!ventana) return;
@@ -1526,6 +1532,7 @@ async function mostrarScoring(score) {
     linea.span.textContent = (0).toFixed(linea.decimales);
   }
 
+  limpiarSkinScoring();
   scoringOverlay.classList.remove("oculto");
 
   const fijarValorFinal = (linea) => {
