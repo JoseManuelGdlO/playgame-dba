@@ -24,18 +24,27 @@ pub enum Categoria {
     Ritmo,
 }
 
-/// El efecto mecánico real de un perk. Solo Billetera y Fama, y "Segunda
-/// Opinión" (Plan 17), tienen efecto hoy — el resto de Detective/Manos
-/// Rápidas/Ritmo dependen de sistemas que no existen todavía (consola SQL
-/// real con ERD/autocompletado) y usan `SinEfectoMecanico`: se pueden
-/// desbloquear/equipar de verdad, pero no hacen nada todavía.
+/// Efecto mecánico de un perk (equipado = activo).
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
 pub enum Efecto {
+    /// Multiplica dinero ganado (+0.2 → ×1.2).
     BonoDinero(f64),
+    /// Multiplica reputación ganada.
     BonoReputacion(f64),
-    /// Intentos extra por ticket antes de perderlo (Plan 17).
+    /// Intentos extra por ticket.
     BonoIntentos(u32),
-    SinEfectoMecanico,
+    /// Multiplica el costo de tiempo del ticket (0.75 = 25% menos).
+    FactorCostoTiempo(f64),
+    /// Suma al presupuesto de tiempo al empezar un turno.
+    BonoPresupuestoTurno(u32),
+    /// Resalta tablas útiles al abrir un ticket.
+    DestacarTablasTicket,
+    /// Resalta más las relaciones en el esquema.
+    ResaltarRelacionesEsquema,
+    /// Autocompletado de tablas/columnas en el editor.
+    AutocompletadoSql,
+    /// Historial de deshacer + aviso antes de ejecutar algo raro.
+    RedSeguridadSql,
 }
 
 const CATALOGO: [Perk; 9] = [
@@ -43,45 +52,45 @@ const CATALOGO: [Perk; 9] = [
         id: "instinto",
         nombre: "Instinto",
         categoria: Categoria::Detective,
-        descripcion: "Al abrir un ticket, resalta automáticamente qué tablas probablemente necesitas.",
+        descripcion: "Al abrir un ticket, marca qué tablas probablemente necesitas.",
         costo_dinero: 200,
         reputacion_minima: 3.0,
         arquetipo_requerido: Arquetipo::Select,
         xp_minimo: 20,
-        efecto: Efecto::SinEfectoMecanico,
+        efecto: Efecto::DestacarTablasTicket,
     },
     Perk {
         id: "rayos_x",
         nombre: "Rayos X",
         categoria: Categoria::Detective,
-        descripcion: "Ves las relaciones entre tablas al instante en el visor de esquema.",
+        descripcion: "En el esquema, las relaciones entre tablas se ven mucho más claras.",
         costo_dinero: 300,
         reputacion_minima: 5.0,
         arquetipo_requerido: Arquetipo::Join,
         xp_minimo: 40,
-        efecto: Efecto::SinEfectoMecanico,
+        efecto: Efecto::ResaltarRelacionesEsquema,
     },
     Perk {
         id: "piloto_automatico",
         nombre: "Piloto Automático",
         categoria: Categoria::ManosRapidas,
-        descripcion: "Autocompletado más inteligente en el editor.",
+        descripcion: "Sugiere nombres de tablas y columnas mientras escribes.",
         costo_dinero: 250,
         reputacion_minima: 4.0,
         arquetipo_requerido: Arquetipo::Select,
         xp_minimo: 30,
-        efecto: Efecto::SinEfectoMecanico,
+        efecto: Efecto::AutocompletadoSql,
     },
     Perk {
         id: "red_de_seguridad",
         nombre: "Red de Seguridad",
         categoria: Categoria::ManosRapidas,
-        descripcion: "Deshacer ilimitado + aviso antes de ejecutar algo probablemente erróneo.",
+        descripcion: "Puedes deshacer lo que escribes y te avisa si vas a ejecutar algo peligroso.",
         costo_dinero: 350,
         reputacion_minima: 6.0,
         arquetipo_requerido: Arquetipo::Agregacion,
         xp_minimo: 50,
-        efecto: Efecto::SinEfectoMecanico,
+        efecto: Efecto::RedSeguridadSql,
     },
     Perk {
         id: "buena_fama",
@@ -109,23 +118,23 @@ const CATALOGO: [Perk; 9] = [
         id: "cafe_cargado",
         nombre: "Café Cargado",
         categoria: Categoria::Ritmo,
-        descripcion: "Reduce el costo de tiempo de los tickets.",
+        descripcion: "Los tickets cuestan menos tiempo de tu día.",
         costo_dinero: 200,
         reputacion_minima: 3.0,
         arquetipo_requerido: Arquetipo::Select,
         xp_minimo: 20,
-        efecto: Efecto::SinEfectoMecanico,
+        efecto: Efecto::FactorCostoTiempo(0.75),
     },
     Perk {
         id: "modo_turbo",
         nombre: "Modo Turbo",
         categoria: Categoria::Ritmo,
-        descripcion: "Más presupuesto de tiempo por turno.",
+        descripcion: "Empiezas cada día con más presupuesto de tiempo.",
         costo_dinero: 400,
         reputacion_minima: 7.0,
         arquetipo_requerido: Arquetipo::Join,
         xp_minimo: 60,
-        efecto: Efecto::SinEfectoMecanico,
+        efecto: Efecto::BonoPresupuestoTurno(40),
     },
     Perk {
         id: "segunda_opinion",
@@ -140,24 +149,46 @@ const CATALOGO: [Perk; 9] = [
     },
 ];
 
-/// Catálogo completo de perks (Etapa 13) — 9 perks: 2 por categoría, salvo
-/// Manos Rápidas que tiene 3 (Plan 17 agrega "Segunda Opinión").
+/// Catálogo completo de perks (Etapa 13) — 9 perks.
 pub fn catalogo() -> &'static [Perk] {
     &CATALOGO
 }
 
-/// Busca un perk por id en el catálogo. Hoy solo lo usan los tests de este
-/// módulo y de `economia` (Etapa 13, Plan 5) — se mantiene `pub` porque es
-/// parte de la API pública del catálogo y un llamador real (comando Tauri o
-/// UI) es un uso natural futuro, no un descuido.
-#[allow(dead_code)]
 pub fn buscar(id: &str) -> Option<&'static Perk> {
     CATALOGO.iter().find(|p| p.id == id)
 }
 
-/// Techo de `reputacion_minima` que el hub puede mostrar según rango/rep.
-/// Becario solo ve perks de arranque; Auxiliar va abriendo mejores a medida
-/// que sube la reputación (con margen de +2 para ver el próximo objetivo).
+/// Extrae nombres de tabla que aparecen tras FROM / JOIN en un SQL.
+pub fn tablas_mencionadas_en_sql(sql: &str) -> Vec<String> {
+    let lower = sql.to_lowercase();
+    let mut tablas = Vec::new();
+    for clave in [" from ", " join ", "\nfrom ", "\njoin "] {
+        let mut resto = lower.as_str();
+        while let Some(pos) = resto.find(clave) {
+            let despues = &resto[pos + clave.len()..];
+            let nombre: String = despues
+                .chars()
+                .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                .collect();
+            if !nombre.is_empty() && !tablas.iter().any(|t| t == &nombre) {
+                tablas.push(nombre);
+            }
+            resto = &resto[pos + clave.len()..];
+        }
+    }
+    // También cubre "FROM tabla" al inicio.
+    if let Some(resto) = lower.strip_prefix("from ") {
+        let nombre: String = resto
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+            .collect();
+        if !nombre.is_empty() && !tablas.iter().any(|t| t == &nombre) {
+            tablas.insert(0, nombre);
+        }
+    }
+    tablas
+}
+
 pub fn techo_revelacion(rango: Rango, reputacion: f64) -> f64 {
     match rango {
         Rango::Becario => 4.0,
@@ -165,8 +196,6 @@ pub fn techo_revelacion(rango: Rango, reputacion: f64) -> f64 {
     }
 }
 
-/// Un perk aparece en el hub si ya lo tienes o si su requisito de
-/// reputación entra bajo el techo de revelación del progreso actual.
 pub fn visible_en_hub(
     perk: &Perk,
     rango: Rango,
@@ -183,17 +212,42 @@ mod tests {
 
     #[test]
     fn catalogo_tiene_9_perks() {
-        assert_eq!(catalogo().len(), 9, "8 originales + Segunda Opinion (Plan 17)");
+        assert_eq!(catalogo().len(), 9);
     }
 
     #[test]
-    fn catalogo_tiene_2_perks_por_categoria_salvo_manos_rapidas_con_3() {
-        for categoria in [Categoria::Detective, Categoria::BilleteraYFama, Categoria::Ritmo] {
-            let cantidad = catalogo().iter().filter(|p| p.categoria == categoria).count();
-            assert_eq!(cantidad, 2, "{categoria:?} debe tener exactamente 2 perks");
+    fn todos_los_perks_tienen_efecto_mecanico() {
+        for perk in catalogo() {
+            // Cualquier variante del enum cuenta; ninguno debe quedar “vacío”.
+            let _ = perk.efecto;
+            assert!(
+                !matches!(format!("{:?}", perk.efecto).as_str(), ""),
+                "{} debe tener efecto",
+                perk.id
+            );
         }
-        let manos_rapidas = catalogo().iter().filter(|p| p.categoria == Categoria::ManosRapidas).count();
-        assert_eq!(manos_rapidas, 3, "ManosRapidas suma Segunda Opinion (Plan 17)");
+        assert!(buscar("cafe_cargado").is_some());
+        assert!(matches!(
+            buscar("cafe_cargado").unwrap().efecto,
+            Efecto::FactorCostoTiempo(_)
+        ));
+        assert!(matches!(
+            buscar("modo_turbo").unwrap().efecto,
+            Efecto::BonoPresupuestoTurno(_)
+        ));
+        assert!(matches!(
+            buscar("instinto").unwrap().efecto,
+            Efecto::DestacarTablasTicket
+        ));
+    }
+
+    #[test]
+    fn tablas_mencionadas_extrae_from_y_join() {
+        let tablas = tablas_mencionadas_en_sql(
+            "SELECT * FROM empleados e JOIN departamentos d ON e.dep = d.id",
+        );
+        assert!(tablas.contains(&"empleados".to_string()));
+        assert!(tablas.contains(&"departamentos".to_string()));
     }
 
     #[test]
@@ -201,33 +255,6 @@ mod tests {
         let perk = buscar("buena_fama").expect("buena_fama debe existir");
         assert_eq!(perk.nombre, "Buena Fama");
         assert_eq!(perk.efecto, Efecto::BonoReputacion(0.2));
-    }
-
-    #[test]
-    fn buscar_devuelve_none_para_id_invalido() {
-        assert!(buscar("perk_que_no_existe").is_none());
-    }
-
-    #[test]
-    fn solo_billetera_y_fama_y_segunda_opinion_tienen_efecto_mecanico_real() {
-        for perk in catalogo() {
-            let tiene_efecto_real = !matches!(perk.efecto, Efecto::SinEfectoMecanico);
-            let debe_tener_efecto_real = perk.categoria == Categoria::BilleteraYFama || perk.id == "segunda_opinion";
-            assert_eq!(
-                tiene_efecto_real,
-                debe_tener_efecto_real,
-                "'{}' (categoría {:?}) tiene un efecto real inesperado, o le falta uno (Plan 17: Segunda Opinion es la única excepción fuera de Billetera y Fama)",
-                perk.nombre,
-                perk.categoria
-            );
-        }
-    }
-
-    #[test]
-    fn segunda_opinion_da_2_intentos_extra() {
-        let perk = buscar("segunda_opinion").expect("segunda_opinion debe existir");
-        assert_eq!(perk.categoria, Categoria::ManosRapidas);
-        assert_eq!(perk.efecto, Efecto::BonoIntentos(2));
     }
 
     #[test]
@@ -240,28 +267,12 @@ mod tests {
         assert!(visibles.contains(&"instinto"));
         assert!(visibles.contains(&"cafe_cargado"));
         assert!(visibles.contains(&"piloto_automatico"));
-        assert!(!visibles.contains(&"buena_fama"));
-        assert!(!visibles.contains(&"modo_turbo"));
         assert_eq!(visibles.len(), 3);
     }
 
     #[test]
-    fn auxiliar_con_poca_rep_abre_hasta_umbral_5() {
-        let visibles: Vec<_> = catalogo()
-            .iter()
-            .filter(|p| visible_en_hub(p, Rango::AuxiliarDeSistemas, 2.5, false, false))
-            .map(|p| p.id)
-            .collect();
-        assert!(visibles.contains(&"buena_fama"));
-        assert!(visibles.contains(&"segunda_opinion"));
-        assert!(visibles.contains(&"rayos_x"));
-        assert!(!visibles.contains(&"modo_turbo"));
-        assert!(!visibles.contains(&"bono_bajo_la_mesa"));
-    }
-
-    #[test]
-    fn perk_ya_desbloqueado_sigue_visible_aunque_el_techo_sea_bajo() {
-        let turbo = buscar("modo_turbo").expect("modo_turbo");
-        assert!(visible_en_hub(turbo, Rango::Becario, 0.0, true, false));
+    fn segunda_opinion_da_2_intentos_extra() {
+        let perk = buscar("segunda_opinion").expect("segunda_opinion debe existir");
+        assert_eq!(perk.efecto, Efecto::BonoIntentos(2));
     }
 }

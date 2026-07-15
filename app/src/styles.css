@@ -1374,40 +1374,82 @@ tr:nth-child(even) td {
 
 .barra-pestanas {
   display: flex;
-  gap: 0.4rem;
-  margin-top: 0.85rem;
+  gap: 0.5rem;
+  margin-top: 0.65rem;
   padding-bottom: 0.25rem;
   flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: center;
 }
 
 .pestana {
-  background: rgba(80, 64, 48, 0.82);
-  color: #d8c8a8;
-  padding: 0.65rem 1.2rem;
-  border-radius: 3px 3px 0 0;
-  font-size: 0.92rem;
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 0.45rem;
+  justify-content: center;
+  gap: 0.55rem;
+  min-width: 16.2rem;
+  height: 5.4rem;
+  padding: 0.7rem 2.2rem 0.85rem;
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
+  background-image: url("assets/pestana-folder.png");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
+  color: #2a2018;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
   cursor: pointer;
-  opacity: 0.85;
-  border: 1px solid rgba(42, 32, 24, 0.35);
-  border-bottom: none;
+  opacity: 0.92;
+  filter: brightness(0.96);
+  image-rendering: pixelated;
+  user-select: none;
+}
+
+.pestana svg {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  stroke: #2a2018;
+  color: #2a2018;
 }
 
 .pestana:hover {
   opacity: 1;
+  filter: brightness(1.05);
+  transform: translateY(-1px);
 }
 
 .pestana-activa {
-  background: rgba(42, 32, 24, 0.92);
-  color: #f0e2c4;
   opacity: 1;
+  filter: brightness(1.08) saturate(1.05);
+  transform: translateY(-2px);
+  z-index: 1;
+}
+
+.pestana-activa::after {
+  content: "";
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  bottom: 0.55rem;
+  height: 3px;
+  background: rgba(42, 32, 24, 0.45);
+  border-radius: 1px;
 }
 
 .pestana-bloqueada {
-  opacity: 0.45;
+  opacity: 0.48;
   cursor: not-allowed;
+  filter: grayscale(0.35) brightness(0.9);
+}
+
+.pestana-bloqueada:hover {
+  transform: none;
+  filter: grayscale(0.35) brightness(0.9);
 }
 
 .tooltip-global {
@@ -1560,67 +1602,6 @@ button,
   font-size: 0.7rem;
   line-height: 1.3;
   color: var(--hub-ink-soft);
-}
-
-.aviso-oficina {
-  position: relative;
-  background:
-    repeating-linear-gradient(
-      0deg,
-      rgba(120, 90, 55, 0.08) 0 2px,
-      transparent 2px 4px
-    ),
-    linear-gradient(165deg, #c9a67a 0%, #b8956a 55%, #a9845c 100%);
-  border: 1px solid rgba(70, 45, 25, 0.45);
-  border-radius: 2px;
-  padding: 0.85rem 0.95rem 0.7rem;
-  margin-bottom: 0.95rem;
-  box-shadow: 2px 3px 8px rgba(0, 0, 0, 0.2);
-  color: #2a2018;
-  cursor: pointer;
-}
-
-.aviso-oficina:hover .aviso-oficina-texto {
-  background: rgba(255, 252, 240, 0.95);
-}
-
-.aviso-oficina-chincheta {
-  position: absolute;
-  top: 0.35rem;
-  right: 0.55rem;
-  width: 0.65rem;
-  height: 0.65rem;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #eee 0 30%, #b03030 32% 100%);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-}
-
-.aviso-oficina-etiqueta {
-  font-size: 0.62rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #5a3d28;
-  margin-bottom: 0.35rem;
-  font-weight: 700;
-}
-
-.aviso-oficina-texto {
-  margin: 0;
-  font-size: 0.92rem;
-  line-height: 1.4;
-  color: #1f1812;
-  background: rgba(255, 248, 230, 0.88);
-  border: 1px dashed rgba(70, 45, 25, 0.35);
-  padding: 0.55rem 0.65rem;
-  min-height: 2.6em;
-}
-
-.aviso-oficina-firma {
-  margin: 0.35rem 0 0;
-  font-size: 0.68rem;
-  color: #5a3d28;
-  font-style: italic;
-  text-align: right;
 }
 
 .fax-oficina {

@@ -126,24 +126,6 @@ const EMPRESA_INFO = {
   },
 };
 
-/** Guinos de humor de oficina (estilo mockumentary) — español sencillo. */
-const AVISOS_OFICINA = [
-  "Prohibido gritar “¡estoy en quiebra!” en la sala de juntas. Contabilidad se pone raro.",
-  "Recordatorio: hacerse pasar por otra persona no es un chiste… ni una forma de entrar al sistema.",
-  "Hoy NO es Día del Pretzel. Mañana tampoco. El calendario de eventos está “en revisión”.",
-  "Si tu trabajo tarda mucho, no mires fijamente a la cámara. No ayuda. (A veces sí, un poquito.)",
-  "Se busca dueño de un Tupperware con chili. Kevin jura que no fue él. Kevin siempre jura eso.",
-  "La impresora vuelve a pedir papel con un mensaje raro. Soporte dice que no es un hechizo.",
-  "Premio inventado del mes: “Mejor pedido… y arrepentirse después”. El ganador se castiga solo.",
-  "Nota: no cierres el día esperando que los pedidos se resuelvan solos. No lo harán.",
-  "¿Sala de juntas ocupada? Alguien está “en una reunión”. La reunión es mirar el techo 20 minutos.",
-  "Política informal: si no cabe en un Post-it, probablemente pide demasiado para un solo día.",
-  "Aviso: dejar pedidos a medias baja reputación. Como dejar el microondas sin limpiar.",
-  "Tip del Mentor: leer el pedido dos veces ayuda más que rehacer el mismo trabajo cuatro veces.",
-  "Si alguien firma “- Kevin”, archívalo. O no. Nadie ha confirmado que Kevin exista.",
-  "La cafetera está “fuera de servicio por sentimientos”. Usen el café con moderación.",
-];
-
 const POSTITS_OFICINA = [
   {
     titulo: "IMPORTANTE",
@@ -185,9 +167,7 @@ const FAXES_OFICINA = [
   "Nota del Mentor (tachada): “dejar de enseñar con chistes de oficina”. (Nota nueva: seguir igual.)",
 ];
 
-let avisoOficinaTextoEl;
 let faxOficinaTextoEl;
-let indiceAvisoOficina = 0;
 let indiceFaxOficina = 0;
 /** @type {number[]} */
 let indicesPostitDia = [0, 0, 0];
@@ -199,16 +179,6 @@ function elegirIndiceDistinto(largo, anterior) {
     siguiente = Math.floor(Math.random() * largo);
   }
   return siguiente;
-}
-
-function rotarAvisoOficina(forzarSiguiente = false) {
-  if (!avisoOficinaTextoEl || AVISOS_OFICINA.length === 0) return;
-  if (forzarSiguiente) {
-    indiceAvisoOficina = (indiceAvisoOficina + 1) % AVISOS_OFICINA.length;
-  } else {
-    indiceAvisoOficina = Math.floor(Math.random() * AVISOS_OFICINA.length);
-  }
-  avisoOficinaTextoEl.textContent = AVISOS_OFICINA[indiceAvisoOficina];
 }
 
 function rotarPostitsOficina(nuevoDia = false) {
@@ -239,9 +209,8 @@ function rotarFaxOficina(forzarSiguiente = false) {
   faxOficinaTextoEl.textContent = FAXES_OFICINA[indiceFaxOficina];
 }
 
-/** Al cerrar el día: refresca todos los guinos de oficina del hub. */
+/** Al cerrar el día: refresca post-its y fax del hub. */
 function refrescarHumorOficinaPorNuevoDia() {
-  rotarAvisoOficina(true);
   rotarPostitsOficina(true);
   rotarFaxOficina(true);
 }
@@ -1081,7 +1050,6 @@ function pintarHubDesdeEstadoJuego(estadoJuego) {
   renderRango(estadoJuego.rango);
   actualizarSueldoPerfil(sueldoDiarioDesdeEstado(estadoJuego));
   renderBandeja(estadoJuego);
-  rotarAvisoOficina(false);
   rotarPostitsOficina(false);
   rotarFaxOficina(false);
   ticketActivoId = null;
@@ -1712,11 +1680,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   dineroPendienteHubEl = document.querySelector("#dinero-pendiente-hub");
   retratoJugadorEl = document.querySelector("#retrato-jugador");
   debugRetratoEtiquetaEl = document.querySelector("#debug-retrato-etapa");
-  avisoOficinaTextoEl = document.querySelector("#aviso-oficina-texto");
   faxOficinaTextoEl = document.querySelector("#fax-oficina-texto");
-  document.querySelector(".aviso-oficina")?.addEventListener("click", () => {
-    rotarAvisoOficina(true);
-  });
   document.querySelector(".fax-oficina")?.addEventListener("click", () => {
     rotarFaxOficina(true);
   });
@@ -1724,7 +1688,6 @@ window.addEventListener("DOMContentLoaded", async () => {
   if (hubDelsy) hubDelsy.innerHTML = retratoDelsyHabla();
   reputacionHubPopEl = document.querySelector("#reputacion-hub-pop");
   actualizarRetratoJugador();
-  rotarAvisoOficina(false);
   rotarPostitsOficina(false);
   rotarFaxOficina(false);
   ticketIntentosEl = document.querySelector("#ticket-intentos");
