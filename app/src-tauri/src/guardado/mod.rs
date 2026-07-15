@@ -11,6 +11,9 @@ const ARCHIVO_GUARDADO: &str = "partida.json";
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PartidaGuardada {
     pub dinero: i64,
+    /// Sueldo ganado hoy y aún no cobrado (partidas viejas → 0).
+    #[serde(default)]
+    pub dinero_pendiente: i64,
     pub reputacion: f64,
     pub xp_por_arquetipo: Vec<(crate::tickets::Arquetipo, i64)>,
     pub rango: crate::tickets::Rango,
@@ -60,6 +63,7 @@ mod tests {
     fn partida_de_prueba() -> PartidaGuardada {
         PartidaGuardada {
             dinero: 500,
+            dinero_pendiente: 80,
             reputacion: 12.5,
             xp_por_arquetipo: vec![(Arquetipo::Select, 30), (Arquetipo::Join, 20)],
             rango: Rango::AuxiliarDeSistemas,
@@ -86,6 +90,7 @@ mod tests {
         let cargada = cargar(&dir).expect("debe poder cargar").expect("debe existir un guardado");
 
         assert_eq!(cargada.dinero, partida.dinero);
+        assert_eq!(cargada.dinero_pendiente, partida.dinero_pendiente);
         assert_eq!(cargada.reputacion, partida.reputacion);
         assert_eq!(cargada.xp_por_arquetipo, partida.xp_por_arquetipo);
         assert_eq!(cargada.rango, partida.rango);

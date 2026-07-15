@@ -172,7 +172,7 @@ function pasoEnviarB() {
 
 function pasoTourHub1() {
   mostrarPaso(
-    "El dinero lo usas para desbloquear perks. La reputación además determina qué perks y qué rango puedes alcanzar.",
+    "El sueldo de los tickets se cobra al cerrar el día; con ese dinero desbloqueas perks. La reputación además determina qué perks y qué rango puedes alcanzar.",
     { permitir: [".hub-topbar"], alContinuar: pasoTourHub2 }
   );
 }

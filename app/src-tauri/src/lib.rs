@@ -50,6 +50,7 @@ struct DirectorioGuardado(std::path::PathBuf);
 #[derive(serde::Serialize)]
 struct EstadoJuegoView {
     dinero: i64,
+    dinero_pendiente: i64,
     reputacion: f64,
     rango: tickets::Rango,
     presupuesto_restante: u32,
@@ -67,6 +68,7 @@ impl EstadoJuegoView {
             mapa_intentos_restantes(jugador, &manejado.actual);
         EstadoJuegoView {
             dinero: jugador.dinero,
+            dinero_pendiente: jugador.dinero_pendiente,
             reputacion: jugador.reputacion,
             rango: jugador.rango,
             presupuesto_restante: manejado.actual.presupuesto_restante,
@@ -130,6 +132,7 @@ fn resolver_tickets_guardados(empresa: db::Company, fase: FaseArco, ids: &[Strin
 fn autoguardar(dir: &std::path::Path, jugador: &economia::EstadoJugador, manejado: &TurnoManejado) {
     let partida = guardado::PartidaGuardada {
         dinero: jugador.dinero,
+        dinero_pendiente: jugador.dinero_pendiente,
         reputacion: jugador.reputacion,
         xp_por_arquetipo: jugador.xp_por_arquetipo.clone(),
         rango: jugador.rango,
@@ -198,14 +201,18 @@ impl TurnoManejado {
     /// cuando el turno normal se agota o se vacía).
     fn actualizar_fase(&mut self, ascendio: bool, jugador: &mut economia::EstadoJugador) {
         if ascendio {
+            // El tramo de Becario termina: se cobra el sueldo antes del mini-boss.
+            let _ = jugador.cobrar_sueldo_del_dia();
             let (turno_mini_boss, _) = turno::EstadoTurno::nuevo(&tickets::mini_boss_hospital_arcangel(), 0);
             self.actual = turno_mini_boss;
             self.fase = FaseArco::MiniBoss;
         } else if self.fase == FaseArco::MiniBoss && self.actual.pendientes.is_empty() {
+            let _ = jugador.cobrar_sueldo_del_dia();
             self.fase = FaseArco::ArcoCompletado;
         } else if self.fase == FaseArco::TrabajoNormal
             && (self.actual.pendientes.is_empty() || self.actual.turno_agotado())
         {
+            let _ = jugador.cobrar_sueldo_del_dia();
             self.escalar_y_avanzar(jugador);
         }
     }
@@ -224,6 +231,11 @@ struct EstadoTurnoView {
     empresa: db::Company,
     intentos_restantes: std::collections::HashMap<String, u32>,
     intentos_limite: u32,
+    dinero: i64,
+    dinero_pendiente: i64,
+    reputacion: f64,
+    /// Cuánto se cobró en este cierre de día (`cerrar_dia`); 0 en otros refrescos.
+    dinero_cobrado: i64,
 }
 
 /// Cuántas veces puede fallar un jugador un ticket antes de perderlo del
@@ -248,6 +260,14 @@ fn mapa_intentos_restantes(
 }
 
 fn vista_turno(jugador: &economia::EstadoJugador, manejado: &TurnoManejado) -> EstadoTurnoView {
+    vista_turno_con_cobro(jugador, manejado, 0)
+}
+
+fn vista_turno_con_cobro(
+    jugador: &economia::EstadoJugador,
+    manejado: &TurnoManejado,
+    dinero_cobrado: i64,
+) -> EstadoTurnoView {
     let (intentos_restantes, intentos_limite) = mapa_intentos_restantes(jugador, &manejado.actual);
     EstadoTurnoView {
         presupuesto_restante: manejado.actual.presupuesto_restante,
@@ -256,6 +276,10 @@ fn vista_turno(jugador: &economia::EstadoJugador, manejado: &TurnoManejado) -> E
         empresa: manejado.empresa,
         intentos_restantes,
         intentos_limite,
+        dinero: jugador.dinero,
+        dinero_pendiente: jugador.dinero_pendiente,
+        reputacion: jugador.reputacion,
+        dinero_cobrado,
     }
 }
 
@@ -270,6 +294,7 @@ struct ScoreResult {
     comentario_mentor: Option<String>,
     dinero_ganado: i64,
     dinero_total: i64,
+    dinero_pendiente: i64,
     reputacion_ganada: f64,
     reputacion_total: f64,
     xp_ganado: Vec<(tickets::Arquetipo, i64)>,
@@ -449,6 +474,7 @@ async fn resolver_ticket(
                 comentario_mentor: evaluacion.comentario_mentor.map(str::to_string),
                 dinero_ganado: 0,
                 dinero_total: estado.dinero,
+                dinero_pendiente: estado.dinero_pendiente,
                 reputacion_ganada: 0.0,
                 reputacion_total: estado.reputacion,
                 xp_ganado: Vec::new(),
@@ -485,6 +511,7 @@ async fn resolver_ticket(
         comentario_mentor: evaluacion.comentario_mentor.map(str::to_string),
         dinero_ganado: resultado.dinero_ganado,
         dinero_total: estado.dinero,
+        dinero_pendiente: estado.dinero_pendiente,
         reputacion_ganada: resultado.reputacion_ganada,
         reputacion_total: estado.reputacion,
         xp_ganado: resultado.xp_ganado,
@@ -492,7 +519,7 @@ async fn resolver_ticket(
         ascendio,
         rango_actual: estado.rango,
         mensaje: if evaluacion.correcta {
-            "Ticket resuelto. Contabilidad procesará tu pago... eventualmente.".to_string()
+            "Ticket resuelto. El sueldo se paga al cerrar el día.".to_string()
         } else {
             "El resultado no es el que pide la solicitud. Mira otra vez el filtro y el orden (A→Z, sin DESC si no te lo piden).".to_string()
         },
@@ -512,11 +539,13 @@ fn cerrar_dia(
     // mecánico) durante el mini-boss o esperando la Agencia — el jugador no
     // puede simplemente saltárselos, así que fuera de `TrabajoNormal` esto
     // no hace nada.
+    let mut dinero_cobrado = 0;
     if manejado.fase == FaseArco::TrabajoNormal {
+        dinero_cobrado = estado.cobrar_sueldo_del_dia();
         manejado.escalar_y_avanzar(&mut estado);
     }
     autoguardar(&dir.0, &estado, &manejado);
-    vista_turno(&estado, &manejado)
+    vista_turno_con_cobro(&estado, &manejado, dinero_cobrado)
 }
 
 /// Carga `company` (Etapa 11-G, Plan 8) y reconstruye el turno/catálogo para
@@ -685,6 +714,7 @@ async fn cargar_partida(
 
         let jugador_cargado = economia::EstadoJugador {
             dinero: partida.dinero,
+            dinero_pendiente: partida.dinero_pendiente,
             reputacion: partida.reputacion,
             xp_por_arquetipo: partida.xp_por_arquetipo,
             rango: partida.rango,

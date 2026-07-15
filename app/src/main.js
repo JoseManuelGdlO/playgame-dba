@@ -30,7 +30,9 @@ let listaPerks, perksEquipadosMsg, perkSlotsEl, perkSlotsLabelEl;
 let perkIdsPrevios = { desbloqueados: new Set(), equipados: new Set(), vistos: new Set() };
 let perksYaRenderizados = false;
 let presupuestoEl, listaTickets, ticketActivoInfo, bandejaTitulo;
-let scoringOverlay, scoringAscenso, agenciaOverlay;
+let scoringOverlay, scoringAscenso, agenciaOverlay, cerrarDiaOverlay;
+let cerrarDiaMensajeEl;
+let cerrandoDia = false;
 let pantallaMenu, appShell, pantallaHub, pantallaConsola, btnCargarPartida;
 let pausaOverlay;
 let ticketRetrato, consolaTitulo;
@@ -51,7 +53,7 @@ let offsetArrastreY = 0;
 
 const RETRATOS = {
   generico: `<svg viewBox="0 0 8 8"><rect width="8" height="8" fill="#4a4a3a"/><rect x="2" y="1" width="4" height="3" fill="#8a8266"/><rect x="1" y="4" width="6" height="3" fill="#6b6b52"/><rect x="3" y="2" width="1" height="1" fill="#2a2a1f"/><rect x="5" y="2" width="1" height="1" fill="#2a2a1f"/></svg>`,
-  "El Mentor": `<svg viewBox="0 0 8 8"><rect width="8" height="8" fill="#3a3a2e"/><rect x="2" y="1" width="4" height="3" fill="#9a8a7a"/><rect x="1" y="4" width="6" height="3" fill="#7a6a5a"/><rect x="2" y="2" width="4" height="1" fill="#1c1c15"/></svg>`,
+  "El Mentor": `<img src="assets/mentor.png" alt="El Mentor" width="112" height="112" draggable="false" />`,
   "Auditor de Cumplimiento": `<svg viewBox="0 0 8 8"><rect width="8" height="8" fill="#2a2a35"/><rect x="2" y="1" width="4" height="3" fill="#7a7a8a"/><rect x="1" y="4" width="6" height="3" fill="#5a5a6a"/><rect x="3" y="4" width="2" height="3" fill="#1c1c22"/></svg>`,
 };
 
@@ -140,10 +142,96 @@ const NOMBRE_RANGO = {
 
 const ORDEN_RANGOS = ["Becario", "AuxiliarDeSistemas"];
 
+/** 4 etapas visuales: más cansado conforme avanza la carrera en Hospital. */
+const RETRATOS_JUGADOR = [
+  {
+    src: "assets/jugador-1.png",
+    etiqueta: "Becario · fresco",
+    rangoVista: "Becario",
+  },
+  {
+    src: "assets/jugador-2.png",
+    etiqueta: "Becario · ya rodado",
+    rangoVista: "Becario",
+  },
+  {
+    src: "assets/jugador-3.png",
+    etiqueta: "Auxiliar · cansado",
+    rangoVista: "AuxiliarDeSistemas",
+  },
+  {
+    src: "assets/jugador-4.png",
+    etiqueta: "Post-Auditor · quemado",
+    rangoVista: "AuxiliarDeSistemas",
+  },
+];
+
+let retratoJugadorEl;
+let faseActual = "TrabajoNormal";
+/** `null` = seguir progreso real; 0–3 = forzado desde debug. */
+let debugRetratoEtapa = null;
+let debugRetratoEtiquetaEl;
+
+function indiceRetratoDesdeProgreso({ rango, fase, empresa }) {
+  if (empresa === "Postafeta" || fase === "ArcoCompletado") return 3;
+  if (fase === "MiniBoss" || rango === "AuxiliarDeSistemas") return 2;
+  // Becario: fresco al inicio; más cansado al acercarse al umbral de ascenso.
+  if (reputacionActual >= UMBRAL_ASCENSO_AUXILIAR * 0.55) return 1;
+  return 0;
+}
+
+function aplicarRetratoJugador(indice, { soloVista = false } = {}) {
+  const etapa = RETRATOS_JUGADOR[Math.max(0, Math.min(RETRATOS_JUGADOR.length - 1, indice))];
+  if (!etapa) return;
+  if (retratoJugadorEl) {
+    retratoJugadorEl.src = etapa.src;
+    retratoJugadorEl.alt = etapa.etiqueta;
+  }
+  if (debugRetratoEtiquetaEl) {
+    debugRetratoEtiquetaEl.textContent =
+      debugRetratoEtapa == null
+        ? `Retrato: ${etapa.etiqueta} (progreso real)`
+        : `Retrato: ${etapa.etiqueta} (debug ${debugRetratoEtapa + 1}/${RETRATOS_JUGADOR.length})`;
+  }
+  if (soloVista && rangoPerfilEl) {
+    rangoPerfilEl.textContent = NOMBRE_RANGO[etapa.rangoVista] || etapa.rangoVista;
+  }
+}
+
+function actualizarRetratoJugador() {
+  const indice =
+    debugRetratoEtapa != null
+      ? debugRetratoEtapa
+      : indiceRetratoDesdeProgreso({
+          rango: rangoActual,
+          fase: faseActual,
+          empresa: empresaActual,
+        });
+  aplicarRetratoJugador(indice, { soloVista: debugRetratoEtapa != null });
+}
+
+function ciclarPuestoRetratoDebug() {
+  if (debugRetratoEtapa == null) {
+    debugRetratoEtapa = 0;
+  } else if (debugRetratoEtapa >= RETRATOS_JUGADOR.length - 1) {
+    debugRetratoEtapa = null;
+    actualizarRetratoJugador();
+    setStatus("Retrato: otra vez según progreso real.", "ok");
+    return;
+  } else {
+    debugRetratoEtapa += 1;
+  }
+  actualizarRetratoJugador();
+  const etapa = RETRATOS_JUGADOR[debugRetratoEtapa];
+  setStatus(`Debug puesto: ${etapa.etiqueta}`, "ok");
+}
+
 function renderRango(rango) {
   const nombre = NOMBRE_RANGO[rango] || rango;
   rangoEl.textContent = nombre;
-  rangoPerfilEl.textContent = nombre;
+  if (debugRetratoEtapa == null) {
+    rangoPerfilEl.textContent = nombre;
+  }
   progresoRangoActualTextoEl.textContent = nombre;
 
   const indiceActual = ORDEN_RANGOS.indexOf(rango);
@@ -153,17 +241,46 @@ function renderRango(rango) {
     : "Alcanzaste el máximo rango disponible";
 
   rangoActual = rango;
+  actualizarRetratoJugador();
 }
 
-function actualizarDinero(valor) {
+let dineroPendienteHubEl;
+let conteoTicketsPendientes = 0;
+
+function actualizarDinero(valor, pendiente) {
   dineroEl.textContent = valor;
   dineroHubEl.textContent = valor;
+  const pendienteNum = Number(pendiente) || 0;
+  if (dineroPendienteHubEl) {
+    if (pendienteNum > 0) {
+      dineroPendienteHubEl.textContent = `(+${pendienteNum})`;
+      dineroPendienteHubEl.classList.remove("oculto");
+      dineroPendienteHubEl.setAttribute("aria-hidden", "false");
+      dineroPendienteHubEl.title = "Sueldo ganado hoy — se cobra al cerrar el día";
+    } else {
+      dineroPendienteHubEl.textContent = "";
+      dineroPendienteHubEl.classList.add("oculto");
+      dineroPendienteHubEl.setAttribute("aria-hidden", "true");
+      dineroPendienteHubEl.removeAttribute("title");
+    }
+  }
+}
+
+function sincronizarEconomiaDesdeEstado(estado) {
+  if (estado == null) return;
+  if (typeof estado.dinero === "number") {
+    actualizarDinero(estado.dinero, estado.dinero_pendiente);
+  }
+  if (typeof estado.reputacion === "number") {
+    actualizarReputacion(estado.reputacion.toFixed(1));
+  }
 }
 
 function actualizarReputacion(valorFormateado) {
   reputacionEl.textContent = valorFormateado;
   reputacionHubEl.textContent = valorFormateado;
   reputacionActual = Number.parseFloat(valorFormateado) || 0;
+  actualizarRetratoJugador();
 }
 
 let ticketActivoId = null;
@@ -670,7 +787,11 @@ function mostrarToastTicket(feedback) {
   const partes = [`${lineaResultado} · ${feedback.titulo}`];
   if (feedback.pass) {
     const repTxt = Number(feedback.deltaRep).toFixed(1);
-    partes.push(`+$${feedback.deltaDinero} · +${repTxt} rep`);
+    const dineroTxt =
+      feedback.deltaDinero > 0
+        ? `+$${feedback.deltaDinero} (al cerrar el día)`
+        : `+$0`;
+    partes.push(`${dineroTxt} · +${repTxt} rep`);
   }
   ticketToastEl.textContent = partes.join("\n");
   ticketToastEl.classList.toggle("es-fallo", !feedback.pass);
@@ -686,9 +807,7 @@ function aplicarFeedbackEnHub() {
 
   mostrarToastTicket(feedback);
 
-  if (feedback.pass && feedback.deltaDinero !== 0) {
-    mostrarPopBadge(dineroHubPopEl, `+$${feedback.deltaDinero}`);
-  }
+  // El sueldo no entra a la billetera hasta cerrar el día — solo pop de reputación aquí.
   if (feedback.pass && feedback.deltaRep !== 0) {
     const repTxt = Number(feedback.deltaRep).toFixed(1);
     mostrarPopBadge(reputacionHubPopEl, `+${repTxt}`);
@@ -702,9 +821,15 @@ function aplicarFeedbackEnHub() {
 
 function renderBandeja(estadoTurno) {
   sincronizarIntentosDesdeEstado(estadoTurno);
+  sincronizarEconomiaDesdeEstado(estadoTurno);
+  conteoTicketsPendientes = Array.isArray(estadoTurno.pendientes)
+    ? estadoTurno.pendientes.length
+    : 0;
   presupuestoEl.textContent = estadoTurno.presupuesto_restante;
   bandejaTitulo.textContent = TITULO_FASE[estadoTurno.fase] || "Bandeja — turno actual";
   empresaActual = estadoTurno.empresa;
+  faseActual = estadoTurno.fase || "TrabajoNormal";
+  actualizarRetratoJugador();
   const empresa = EMPRESA_INFO[estadoTurno.empresa];
   if (empresa) {
     empresaNombreEl.textContent = empresa.nombre;
@@ -776,7 +901,8 @@ async function cargarTurno() {
 }
 
 function pintarHubDesdeEstadoJuego(estadoJuego) {
-  actualizarDinero(estadoJuego.dinero);
+  debugRetratoEtapa = null;
+  actualizarDinero(estadoJuego.dinero, estadoJuego.dinero_pendiente);
   actualizarReputacion(estadoJuego.reputacion.toFixed(1));
   renderRango(estadoJuego.rango);
   renderBandeja(estadoJuego);
@@ -868,12 +994,78 @@ async function cargarPartida() {
   }
 }
 
+function ocultarConfirmarCerrarDia() {
+  if (cerrarDiaOverlay) cerrarDiaOverlay.classList.add("oculto");
+}
+
+function pedirConfirmarCerrarDia() {
+  return new Promise((resolve) => {
+    if (!cerrarDiaOverlay || !cerrarDiaMensajeEl) {
+      resolve(false);
+      return;
+    }
+
+    const n = conteoTicketsPendientes;
+    cerrarDiaMensajeEl.textContent =
+      n === 1
+        ? "Todavía te queda 1 ticket sin resolver."
+        : `Todavía te quedan ${n} tickets sin resolver.`;
+
+    const btnConfirmar = document.querySelector("#btn-confirmar-cerrar-dia");
+    const btnCancelar = document.querySelector("#btn-cancelar-cerrar-dia");
+
+    const finalizar = (ok) => {
+      btnConfirmar.removeEventListener("click", onConfirmar);
+      btnCancelar.removeEventListener("click", onCancelar);
+      document.removeEventListener("keydown", onTecla);
+      ocultarConfirmarCerrarDia();
+      resolve(ok);
+    };
+    const onConfirmar = () => finalizar(true);
+    const onCancelar = () => finalizar(false);
+    const onTecla = (evento) => {
+      if (evento.key === "Escape") {
+        evento.preventDefault();
+        finalizar(false);
+      }
+    };
+
+    btnConfirmar.addEventListener("click", onConfirmar);
+    btnCancelar.addEventListener("click", onCancelar);
+    document.addEventListener("keydown", onTecla);
+    cerrarDiaOverlay.classList.remove("oculto");
+    btnCancelar.focus();
+  });
+}
+
+async function ejecutarCerrarDia() {
+  if (cerrandoDia) return;
+  cerrandoDia = true;
+  try {
+    const estadoTurno = await invoke("cerrar_dia");
+    ticketActivoId = null;
+    renderBandeja(estadoTurno);
+
+    const cobrado = Number(estadoTurno.dinero_cobrado) || 0;
+    if (cobrado > 0) {
+      mostrarPopBadge(dineroHubPopEl, `+$${cobrado}`);
+      setStatus(`Día cerrado. Cobras $${cobrado}. Turno nuevo.`, "ok");
+    } else {
+      setStatus("Día cerrado. Turno nuevo.", "ok");
+    }
+    sfxCierreDia();
+  } finally {
+    cerrandoDia = false;
+  }
+}
+
 async function cerrarDia() {
-  const estadoTurno = await invoke("cerrar_dia");
-  ticketActivoId = null;
-  renderBandeja(estadoTurno);
-  setStatus("Día cerrado. Turno nuevo.", "ok");
-  sfxCierreDia();
+  if (cerrandoDia) return;
+  if (conteoTicketsPendientes > 0) {
+    const ok = await pedirConfirmarCerrarDia();
+    if (!ok) return;
+  }
+  await ejecutarCerrarDia();
 }
 
 async function confirmarTransicionAgencia() {
@@ -919,6 +1111,12 @@ async function mostrarScoring(score) {
   tituloEl.className = "";
   mentorEl.textContent = "";
   scoringAscenso.textContent = "";
+
+  const notaDineroEl = document.querySelector("#scoring-dinero-nota");
+  if (notaDineroEl) {
+    notaDineroEl.textContent =
+      score.pass && score.dinero_ganado > 0 ? "(se paga al cerrar el día)" : "";
+  }
 
   const lineas = [
     { span: document.querySelector("#scoring-correctitud"), valor: score.puntaje_correctitud, decimales: 0 },
@@ -985,7 +1183,7 @@ async function submitTicket() {
       deltaRep: score.reputacion_ganada,
       ascendio: score.ascendio,
     };
-    actualizarDinero(score.dinero_total);
+    actualizarDinero(score.dinero_total, score.dinero_pendiente);
     actualizarReputacion(score.reputacion_total.toFixed(1));
     renderRango(score.rango_actual);
     mostrarScoring(score);
@@ -1277,6 +1475,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   scoringOverlay = document.querySelector("#scoring-overlay");
   scoringAscenso = document.querySelector("#scoring-ascenso");
   agenciaOverlay = document.querySelector("#agencia-overlay");
+  cerrarDiaOverlay = document.querySelector("#cerrar-dia-overlay");
+  cerrarDiaMensajeEl = document.querySelector("#cerrar-dia-mensaje");
   esquemaOverlay = document.querySelector("#esquema-overlay");
   esquemaLienzo = document.querySelector("#esquema-lienzo");
   esquemaSvg = document.querySelector("#esquema-svg");
@@ -1312,7 +1512,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   ticketToastEl = document.querySelector("#ticket-toast");
   bossBannerEl = document.querySelector("#boss-banner");
   dineroHubPopEl = document.querySelector("#dinero-hub-pop");
+  dineroPendienteHubEl = document.querySelector("#dinero-pendiente-hub");
+  retratoJugadorEl = document.querySelector("#retrato-jugador");
+  debugRetratoEtiquetaEl = document.querySelector("#debug-retrato-etapa");
   reputacionHubPopEl = document.querySelector("#reputacion-hub-pop");
+  actualizarRetratoJugador();
   ticketIntentosEl = document.querySelector("#ticket-intentos");
 
   await mostrarMenu();
@@ -1384,6 +1588,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
   document.querySelector("#debug-aplicar")?.addEventListener("click", () => aplicarDebugEstado(false));
   document.querySelector("#debug-forzar-auditor")?.addEventListener("click", () => aplicarDebugEstado(true));
+  document.querySelector("#debug-ciclo-puesto")?.addEventListener("click", ciclarPuestoRetratoDebug);
   document.querySelector("#debug-cerrar")?.addEventListener("click", () => alternarDebugOverlay(false));
 
   document.querySelector("#tab-dashboard").addEventListener("click", () => {
@@ -1449,7 +1654,8 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (tutorialActivo()) return;
     const hayOverlayResultado = !scoringOverlay.classList.contains("oculto");
     const hayOverlayAgencia = !agenciaOverlay.classList.contains("oculto");
-    if (hayOverlayResultado || hayOverlayAgencia) return;
+    const hayOverlayCerrarDia = cerrarDiaOverlay && !cerrarDiaOverlay.classList.contains("oculto");
+    if (hayOverlayResultado || hayOverlayAgencia || hayOverlayCerrarDia) return;
     pausaOverlay.classList.toggle("oculto");
   });
 

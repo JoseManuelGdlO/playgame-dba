@@ -43,9 +43,10 @@
         />
         <div class="hub-papel">
         <div class="hub-topbar">
-          <div class="hub-badge" data-tooltip="Dinero disponible — se gana resolviendo tickets y se gasta desbloqueando perks.">
+          <div class="hub-badge" data-tooltip="Dinero en mano — el sueldo de los tickets se cobra al cerrar el día. Se gasta desbloqueando perks.">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5c0-1 1-1.5 3-1.5s3 1 3 2-1 1.5-3 1.5-3 .5-3 1.5 1 2 3 2 3-.5 3-1.5"/></svg>
             <span id="dinero-hub">0</span>
+            <span id="dinero-pendiente-hub" class="dinero-pendiente-hub oculto" aria-hidden="true"></span>
             <span id="dinero-hub-pop" class="hub-badge-pop oculto" aria-hidden="true"></span>
           </div>
           <div class="hub-badge" data-tooltip="Reputación — sube al resolver tickets bien y determina qué perks y rangos puedes alcanzar.">
@@ -61,7 +62,14 @@
               <div class="clip-papel"></div>
               <div class="tarjeta-perfil-titulo">Tu perfil</div>
               <div class="tarjeta-perfil-avatar">
-                <svg viewBox="0 0 8 8"><rect width="8" height="8" fill="#4a4a3a"/><rect x="2" y="1" width="4" height="3" fill="#8a8266"/><rect x="1" y="4" width="6" height="3" fill="#6b6b52"/></svg>
+                <img
+                  id="retrato-jugador"
+                  src="assets/jugador-1.png"
+                  alt="Tu perfil"
+                  width="168"
+                  height="168"
+                  draggable="false"
+                />
               </div>
               <div class="tarjeta-perfil-rango" id="rango-perfil">Becario</div>
               <div class="tarjeta-perfil-rango-label">Rango actual</div>
@@ -107,6 +115,7 @@
               Cerrar día
               <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"/></svg>
             </button>
+            <p id="ayuda-cerrar-dia" class="ayuda-cerrar-dia">Al cerrar cobras el sueldo del día. Si dejas tickets sin resolver, pierdes ese progreso (baja reputación).</p>
           </section>
 
           <section class="perks hub-columna-perks">
@@ -193,8 +202,10 @@
         <div class="debug-acciones">
           <button type="button" id="debug-aplicar">Aplicar y refrescar</button>
           <button type="button" id="debug-forzar-auditor">Forzar Auditor</button>
+          <button type="button" id="debug-ciclo-puesto">Cambiar puesto (retrato)</button>
           <button type="button" id="debug-cerrar">Cerrar</button>
         </div>
+        <p id="debug-retrato-etapa" class="debug-nota">Retrato: según progreso real.</p>
         <p class="debug-nota">Forzar Auditor pone rep≥umbral, rango Auxiliar y la bandeja del mini-boss (usa partidas en Hospital).</p>
       </div>
     </div>
@@ -217,7 +228,7 @@
           <p>Correctitud: <span id="scoring-correctitud">0</span></p>
           <p>Velocidad: <span id="scoring-velocidad">0</span></p>
           <p>Buenas prácticas: <span id="scoring-practicas">0</span></p>
-          <p>💰 +<span id="scoring-dinero">0</span></p>
+          <p>💰 +<span id="scoring-dinero">0</span> <span id="scoring-dinero-nota" class="scoring-nota"></span></p>
           <p>⭐ +<span id="scoring-reputacion">0</span></p>
           <p id="scoring-mentor"></p>
           <p id="scoring-ascenso"></p>
@@ -239,6 +250,26 @@
           <p>Has superado al Auditor de Cumplimiento. Tu siguiente asignación:</p>
           <p><strong>Postafeta</strong> — todo el Slack de la empresa lo administra un becario invisible llamado Kevin; todo viene firmado "- Kevin".</p>
           <button id="btn-confirmar-agencia">Aceptar reasignación</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="cerrar-dia-overlay" class="scoring-overlay oculto" role="dialog" aria-modal="true" aria-labelledby="cerrar-dia-titulo">
+      <div class="ventana-terminal">
+        <div class="ventana-terminal-barra">
+          <span class="ventana-terminal-punto rojo"></span>
+          <span class="ventana-terminal-punto amarillo"></span>
+          <span class="ventana-terminal-punto verde"></span>
+          <span class="ventana-terminal-titulo">query-path — cierre de día</span>
+        </div>
+        <div class="ventana-terminal-cuerpo scoring-panel confirmar-panel">
+          <h2 id="cerrar-dia-titulo">¿Cerrar el día?</h2>
+          <p id="cerrar-dia-mensaje"></p>
+          <p class="confirmar-aviso">Perderás el progreso de esos tickets (baja tu reputación). El sueldo de lo que sí resolviste se te paga al cerrar.</p>
+          <div class="confirmar-acciones">
+            <button type="button" id="btn-cancelar-cerrar-dia" class="btn-secundario">Seguir trabajando</button>
+            <button type="button" id="btn-confirmar-cerrar-dia">Cerrar de todas formas</button>
+          </div>
         </div>
       </div>
     </div>

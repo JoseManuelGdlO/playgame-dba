@@ -87,6 +87,9 @@ pub fn calcular(
 #[derive(Debug, Clone, Default)]
 pub struct EstadoJugador {
     pub dinero: i64,
+    /// Sueldo ganado en tickets del día actual; se suma a `dinero` al cerrar
+    /// el día (o al cerrar el tramo de trabajo, p. ej. al subir al Auditor).
+    pub dinero_pendiente: i64,
     pub reputacion: f64,
     pub xp_por_arquetipo: Vec<(Arquetipo, i64)>,
     pub rango: Rango,
@@ -105,13 +108,11 @@ pub struct EstadoJugador {
 pub(crate) const UMBRAL_ASCENSO_AUXILIAR: f64 = 2.5;
 
 impl EstadoJugador {
-    /// Aplica el resultado de una entrega (Etapa 12): acumula dinero,
-    /// reputación y XP por arquetipo sobre el estado existente, y dispara el
-    /// ascenso automático de rango si la reputación acumulada ya cruzó el
-    /// umbral (Etapa 10, Plan 7). Devuelve `true` solo en la entrega exacta
-    /// en la que el ascenso ocurre, para que el llamador pueda anunciarlo.
+    /// Aplica el resultado de una entrega: reputación y XP al momento;
+    /// el dinero se acumula en `dinero_pendiente` y se cobra al cerrar el día.
+    /// Devuelve `true` solo en la entrega exacta en la que el ascenso ocurre.
     pub fn aplicar_resultado(&mut self, resultado: &Resultado) -> bool {
-        self.dinero += resultado.dinero_ganado;
+        self.dinero_pendiente += resultado.dinero_ganado;
         self.reputacion += resultado.reputacion_ganada;
         for &(arquetipo, xp) in &resultado.xp_ganado {
             match self.xp_por_arquetipo.iter_mut().find(|(a, _)| *a == arquetipo) {
@@ -125,6 +126,15 @@ impl EstadoJugador {
         } else {
             false
         }
+    }
+
+    /// Pasa el sueldo del día a la billetera y lo deja en cero. Devuelve
+    /// cuánto se cobró (0 si no había nada pendiente).
+    pub fn cobrar_sueldo_del_dia(&mut self) -> i64 {
+        let pago = self.dinero_pendiente;
+        self.dinero += pago;
+        self.dinero_pendiente = 0;
+        pago
     }
 
     /// Etapa 10: señal de que la reputación ya cruzó el umbral de ascenso —
@@ -373,9 +383,24 @@ mod tests {
 
         estado.aplicar_resultado(&resultado);
 
-        assert_eq!(estado.dinero, 100);
+        assert_eq!(estado.dinero, 0, "el sueldo queda pendiente hasta cerrar el día");
+        assert_eq!(estado.dinero_pendiente, 100);
         assert_eq!(estado.reputacion, 0.5);
         assert_eq!(estado.xp_por_arquetipo, vec![(Arquetipo::Select, 10)]);
+    }
+
+    #[test]
+    fn cobrar_sueldo_del_dia_pasa_pendiente_a_la_billetera() {
+        let mut estado = EstadoJugador::default();
+        estado.dinero_pendiente = 150;
+        estado.dinero = 50;
+
+        let cobrado = estado.cobrar_sueldo_del_dia();
+
+        assert_eq!(cobrado, 150);
+        assert_eq!(estado.dinero, 200);
+        assert_eq!(estado.dinero_pendiente, 0);
+        assert_eq!(estado.cobrar_sueldo_del_dia(), 0);
     }
 
     #[test]
@@ -392,7 +417,8 @@ mod tests {
         estado.aplicar_resultado(&resultado);
         estado.aplicar_resultado(&resultado);
 
-        assert_eq!(estado.dinero, 200);
+        assert_eq!(estado.dinero, 0);
+        assert_eq!(estado.dinero_pendiente, 200);
         assert_eq!(
             estado.xp_por_arquetipo,
             vec![(Arquetipo::Select, 20)],
