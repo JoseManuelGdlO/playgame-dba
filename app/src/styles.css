@@ -742,6 +742,77 @@ tr:nth-child(even) td {
   display: block;
 }
 
+.sprite-habla {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.sprite-habla-f {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sprite-habla-f--1 {
+  opacity: 1;
+}
+
+.sprite-habla--hablando .sprite-habla-f--1 {
+  animation: sprite-habla-f1 0.42s steps(1, end) infinite;
+}
+
+.sprite-habla--hablando .sprite-habla-f--2 {
+  animation: sprite-habla-f2 0.42s steps(1, end) infinite;
+}
+
+.sprite-habla--hablando .sprite-habla-f--3 {
+  animation: sprite-habla-f3 0.42s steps(1, end) infinite;
+}
+
+@keyframes sprite-habla-f1 {
+  0%,
+  32% {
+    opacity: 1;
+  }
+  33%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes sprite-habla-f2 {
+  0%,
+  32% {
+    opacity: 0;
+  }
+  33%,
+  65% {
+    opacity: 1;
+  }
+  66%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes sprite-habla-f3 {
+  0%,
+  65% {
+    opacity: 0;
+  }
+  66%,
+  100% {
+    opacity: 1;
+  }
+}
+
 .ticket-info-con-retrato {
   display: flex;
   gap: 0.75rem;
@@ -1096,6 +1167,42 @@ tr:nth-child(even) td {
   margin-top: 0.1rem;
 }
 
+.tarjeta-perfil-sueldo {
+  margin-top: 0.65rem;
+  padding-top: 0.55rem;
+  border-top: 1px dashed rgba(42, 32, 24, 0.25);
+  text-align: center;
+}
+
+.tarjeta-perfil-sueldo-etiqueta {
+  display: block;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8a7355;
+  margin-bottom: 0.15rem;
+}
+
+#sueldo-perfil {
+  display: block;
+  font-size: 1rem;
+  font-weight: 700;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  color: #2a2018;
+}
+
+.tarjeta-perfil-sueldo-nota {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.65rem;
+  color: #6b5a42;
+  line-height: 1.3;
+}
+
+.tarjeta-perfil-sueldo-nota.oculto {
+  display: none;
+}
+
 .tarjeta-progreso-carrera {
   background: rgba(240, 220, 140, 0.78);
   border: 1px solid rgba(90, 70, 30, 0.35);
@@ -1403,6 +1510,56 @@ button,
 
 .nota-menta {
   background: linear-gradient(180deg, #c8f0d8 0%, #9fd9b4 100%);
+}
+
+.tarjeta-delsy {
+  display: flex;
+  gap: 0.55rem;
+  align-items: center;
+  margin-top: 0.95rem;
+  padding: 0.55rem 0.6rem;
+  background: var(--hub-paper);
+  border: 1px solid rgba(42, 32, 24, 0.28);
+  border-radius: 2px;
+  box-shadow: 2px 3px 8px rgba(0, 0, 0, 0.18);
+  transform: rotate(0.9deg);
+}
+
+.tarjeta-delsy-retrato {
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+  border: 2px solid #6b6b52;
+  border-radius: 3px;
+  overflow: hidden;
+  background: #1a2a3a;
+}
+
+.tarjeta-delsy-retrato .sprite-habla,
+.tarjeta-delsy-retrato .sprite-habla-f {
+  width: 100%;
+  height: 100%;
+}
+
+.tarjeta-delsy-nombre {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--hub-ink);
+}
+
+.tarjeta-delsy-rol {
+  margin: 0.1rem 0 0.25rem;
+  font-size: 0.65rem;
+  color: #6b5a42;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tarjeta-delsy-nota {
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.3;
+  color: var(--hub-ink-soft);
 }
 
 .aviso-oficina {
@@ -1836,8 +1993,8 @@ button,
 }
 
 .dialogo-tarjeta .retrato {
-  width: 112px;
-  height: 112px;
+  width: 120px;
+  height: 120px;
 }
 
 .dialogo-nombre {

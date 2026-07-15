@@ -22,6 +22,13 @@ import {
   notificarCierreScoring,
 } from "./tutorial.js";
 import { mostrarDialogo, ocultarDialogo } from "./dialogo.js";
+import {
+  intentarCapitulosHasta,
+  forzarSiguienteCapituloSubtrama,
+  subtramaActiva,
+  reiniciarSubtramaDebug,
+} from "./subtrama.js";
+import { retratoDelsyHabla } from "./sprites.js";
 
 const { invoke } = window.__TAURI__.core;
 
@@ -41,6 +48,8 @@ let btnCerrarScoring;
 let btnSaltarTutorial;
 let headerAppShell, dineroHubEl, reputacionHubEl;
 let rangoPerfilEl, progresoRangoActualTextoEl, progresoRangoSiguienteEl;
+let sueldoPerfilEl, sueldoPerfilNotaEl;
+let sueldoDiarioActual = 0;
 let tooltipGlobal;
 let empresaNombreEl, empresaDescripcionEl;
 let esquemaOverlay, esquemaLienzo, esquemaSvg;
@@ -117,63 +126,63 @@ const EMPRESA_INFO = {
   },
 };
 
-/** Guinos de humor de oficina (estilo mockumentary) para el tablero del hub. */
+/** Guinos de humor de oficina (estilo mockumentary) — español sencillo. */
 const AVISOS_OFICINA = [
-  "Prohibido declarar quiebra en voz alta en la sala de juntas. Contabilidad se pone raro.",
-  "Recordatorio: el robo de identidad no es un chiste… ni una estrategia de login.",
+  "Prohibido gritar “¡estoy en quiebra!” en la sala de juntas. Contabilidad se pone raro.",
+  "Recordatorio: hacerse pasar por otra persona no es un chiste… ni una forma de entrar al sistema.",
   "Hoy NO es Día del Pretzel. Mañana tampoco. El calendario de eventos está “en revisión”.",
-  "Si tu query tarda mucho, no la mires fijamente a cámara. No ayuda. (A veces sí, un poco.)",
+  "Si tu trabajo tarda mucho, no mires fijamente a la cámara. No ayuda. (A veces sí, un poquito.)",
   "Se busca dueño de un Tupperware con chili. Kevin jura que no fue él. Kevin siempre jura eso.",
-  "La impresora dice PC LOAD LETTER otra vez. IT aclara que no es un hechizo.",
-  "Premio inventado del mes: “Mejor SELECT * … y arrepentirse después”. El ganador se castiga solo.",
-  "Nota de seguridad: no cierres el día con la esperanza de que los tickets se resuelvan solos. No lo harán.",
+  "La impresora vuelve a pedir papel con un mensaje raro. Soporte dice que no es un hechizo.",
+  "Premio inventado del mes: “Mejor pedido… y arrepentirse después”. El ganador se castiga solo.",
+  "Nota: no cierres el día esperando que los pedidos se resuelvan solos. No lo harán.",
   "¿Sala de juntas ocupada? Alguien está “en una reunión”. La reunión es mirar el techo 20 minutos.",
-  "Política informal: si no cabe en un Post-it, probablemente tampoco cabe en el alcance del ticket.",
-  "Aviso de cumplimiento: dejar tickets a medias baja reputación. Como dejar el microondas sin limpiar.",
-  "Tip del Mentor: leer el ticket dos veces supera a reescribir el mismo SQL triste cuatro veces.",
-  "Si alguien firma “- Kevin”, créanle. O no. Nadie ha confirmado que Kevin exista.",
-  "La cafetera está “fuera de servicio por sentimientos”. Usen el café cargado (perk) con moderación.",
+  "Política informal: si no cabe en un Post-it, probablemente pide demasiado para un solo día.",
+  "Aviso: dejar pedidos a medias baja reputación. Como dejar el microondas sin limpiar.",
+  "Tip del Mentor: leer el pedido dos veces ayuda más que rehacer el mismo trabajo cuatro veces.",
+  "Si alguien firma “- Kevin”, archívalo. O no. Nadie ha confirmado que Kevin exista.",
+  "La cafetera está “fuera de servicio por sentimientos”. Usen el café con moderación.",
 ];
 
 const POSTITS_OFICINA = [
   {
     titulo: "IMPORTANTE",
     textos: [
-      "Si dices “ASAP” en un ticket, se entiende como “cuando puedas… o nunca”.",
-      "“Urgente” significa: urgente para ellos, opcional para tu presupuesto de tiempo.",
-      "No marques el ticket como resuelto si solo “casi” funciona. Casi no es un JOIN.",
-      "Antes de preguntar: mira el Wiki SQL. Después pregunta. O mira otra vez el Wiki.",
+      "Si dices “lo antes posible” en un pedido, se entiende como “cuando puedas… o nunca”.",
+      "“Urgente” significa: urgente para ellos, opcional para tu tiempo del día.",
+      "No marques el pedido como listo si solo “casi” funciona. Casi no alcanza.",
+      "Antes de preguntar: mira la guía del juego. Después pregunta. O mírala otra vez.",
     ],
   },
   {
     titulo: "RRHH",
     textos: [
       "El “Día del Pretzel” se reprogramó. Otra vez. No pregunten por qué.",
-      "Foto del gafete: sonrían. Si no pueden, al menos no miren a la cámara como Michael.",
+      "Foto del gafete: sonrían. Si no pueden, al menos no miren a la cámara muy intenso.",
       "El microondas no es un armario. Empaqueten, etiqueten, y no calienten pescado. Nunca.",
-      "Premios Dundies de TI: categoría “Better Call SELECT”. No hay estatua. Solo pena.",
+      "Premios inventados de oficina: categoría “mejor cara de “no me pagan suficiente””. Sin estatua.",
     ],
   },
   {
-    titulo: "IT",
+    titulo: "SOPORTE",
     textos: [
-      "Osos. Remolachas. Consultas SQL. (En ese orden de prioridad.)",
-      "Si reinicias el router y “se arregla”, no digas que fue magia. Documenta el ticket.",
-      "Threat Level Midnight 2: ahora con más JOINs y la misma calidad de diálogo.",
-      "El jefe quiere un mug de “World’s Best Boss”. IT solo puede imprimir etiquetas. Improvisen.",
+      "Osos. Remolachas. Pedidos de la bandeja. (En ese orden de prioridad.)",
+      "Si apagas y prendes el aparato y “se arregla”, anótalo en el pedido. No digas que fue magia.",
+      "Casting para película de oficina: se buscan extras. Traer suéter negro. Saber ordenar A→Z.",
+      "El jefe quiere una taza de “mejor jefe del mundo”. Solo podemos imprimir etiquetas. Improvisen.",
     ],
   },
 ];
 
 const FAXES_OFICINA = [
-  "ASUNTO: casting interno — Threat Level Midnight. Se buscan extras que sepan ordenar por A→Z. Traer suéter negro.",
-  "URGENTE: desapareció la taza “World’s Best Boss”. Si la encuentran, no la usen. Está… sentimentalmente contaminada.",
-  "De: Contabilidad / Para: Todos — “¿Quién gastó en pasta y salsa para un “club de italiano”? Respondan o lo cargamos a Oscar.”",
-  "FAX ilegible (como siempre): algo sobre remolachas, una granja y “respuesta correcta = Battlestar… wait, SQL”.",
-  "Recordatorio de seguridad: no compartan contraseñas. Compartir almuerzo tampoco, pero eso es menos grave.",
-  "Convocatoria: reunión de 5 minutos que durará 47. Traer café. No traer ideas nuevas sin SQL de respaldo.",
+  "ASUNTO: casting interno — película de oficina. Se buscan extras que sepan ordenar de la A a la Z. Traer suéter negro.",
+  "URGENTE: desapareció la taza del “mejor jefe del mundo”. Si la encuentran, no la usen. Está… sentimentalmente complicada.",
+  "De: Contabilidad / Para: Todos — “¿Quién gastó en pasta y salsa para un “club de italiano”? Respondan o lo hablamos con Oscar.”",
+  "FAX ilegible (como siempre): algo sobre remolachas, una granja y una serie vieja de ciencia ficción.",
+  "Recordatorio: no compartan contraseñas. Compartir el almuerzo tampoco, pero eso es menos grave.",
+  "Convocatoria: reunión de 5 minutos que durará 47. Traer café. No traer ideas nuevas sin un plan escrito.",
   "Atención Postafeta: si el mensaje dice “- Kevin”, archívenlo. Si no dice “- Kevin”, sospechen.",
-  "Nota del Mentor (tachada): “dejar de enseñar con metáforas de oficina”. (Nota nueva: seguir igual.)",
+  "Nota del Mentor (tachada): “dejar de enseñar con chistes de oficina”. (Nota nueva: seguir igual.)",
 ];
 
 let avisoOficinaTextoEl;
@@ -318,16 +327,29 @@ function aplicarRetratoJugador(indice, { soloVista = false } = {}) {
   }
 }
 
+function indiceEmpleoActual() {
+  if (debugRetratoEtapa != null) return debugRetratoEtapa;
+  return indiceRetratoDesdeProgreso({
+    rango: rangoActual,
+    fase: faseActual,
+    empresa: empresaActual,
+  });
+}
+
 function actualizarRetratoJugador() {
-  const indice =
-    debugRetratoEtapa != null
-      ? debugRetratoEtapa
-      : indiceRetratoDesdeProgreso({
-          rango: rangoActual,
-          fase: faseActual,
-          empresa: empresaActual,
-        });
+  const indice = indiceEmpleoActual();
   aplicarRetratoJugador(indice, { soloVista: debugRetratoEtapa != null });
+}
+
+async function considerarSubtramaEmpleo() {
+  if (tutorialActivo() || subtramaActiva()) return;
+  if (appShell?.classList.contains("oculto")) return;
+  if (pantallaHub?.classList.contains("oculto")) return;
+  try {
+    await intentarCapitulosHasta(indiceEmpleoActual());
+  } catch (_) {
+    /* ignore */
+  }
 }
 
 function ciclarPuestoRetratoDebug() {
@@ -346,6 +368,33 @@ function ciclarPuestoRetratoDebug() {
   setStatus(`Debug puesto: ${etapa.etiqueta}`, "ok");
 }
 
+function sueldoDiarioDesdeEstado(estado) {
+  if (estado && typeof estado.sueldo_diario === "number") {
+    return estado.sueldo_diario;
+  }
+  // Respaldo si alguna vista vieja no trae el campo.
+  if (rangoActual === "Becario") return 0;
+  if (empresaActual === "Postafeta") return 140;
+  return 100;
+}
+
+function actualizarSueldoPerfil(sueldo) {
+  sueldoDiarioActual = Number(sueldo) || 0;
+  if (sueldoPerfilEl) {
+    sueldoPerfilEl.textContent =
+      sueldoDiarioActual <= 0 ? "$0 / día" : `$${sueldoDiarioActual} / día`;
+  }
+  if (sueldoPerfilNotaEl) {
+    if (sueldoDiarioActual <= 0) {
+      sueldoPerfilNotaEl.textContent = "Practicante · sin nómina";
+      sueldoPerfilNotaEl.classList.remove("oculto");
+    } else {
+      sueldoPerfilNotaEl.textContent = "Se paga al cerrar el día";
+      sueldoPerfilNotaEl.classList.remove("oculto");
+    }
+  }
+}
+
 function renderRango(rango) {
   const nombre = NOMBRE_RANGO[rango] || rango;
   rangoEl.textContent = nombre;
@@ -361,6 +410,8 @@ function renderRango(rango) {
     : "Alcanzaste el máximo rango disponible";
 
   rangoActual = rango;
+  // Si no llegó sueldo desde el backend en este frame, recalcula por rango/empresa.
+  actualizarSueldoPerfil(sueldoDiarioDesdeEstado(null));
   actualizarRetratoJugador();
 }
 
@@ -393,6 +444,9 @@ function sincronizarEconomiaDesdeEstado(estado) {
   }
   if (typeof estado.reputacion === "number") {
     actualizarReputacion(estado.reputacion.toFixed(1));
+  }
+  if (typeof estado.sueldo_diario === "number") {
+    actualizarSueldoPerfil(estado.sueldo_diario);
   }
 }
 
@@ -1025,6 +1079,7 @@ function pintarHubDesdeEstadoJuego(estadoJuego) {
   actualizarDinero(estadoJuego.dinero, estadoJuego.dinero_pendiente);
   actualizarReputacion(estadoJuego.reputacion.toFixed(1));
   renderRango(estadoJuego.rango);
+  actualizarSueldoPerfil(sueldoDiarioDesdeEstado(estadoJuego));
   renderBandeja(estadoJuego);
   rotarAvisoOficina(false);
   rotarPostitsOficina(false);
@@ -1086,6 +1141,7 @@ async function iniciarPartida() {
   const estadoJuego = await invoke("iniciar_partida");
   leccionesMentorMostradas = new Set();
   perksYaRenderizados = false;
+  reiniciarSubtramaDebug();
   pintarHubDesdeEstadoJuego(estadoJuego);
   await cargarPerks();
   setStatus("Partida nueva iniciada.", "ok");
@@ -1101,7 +1157,10 @@ async function iniciarPartida() {
     btnSaltarTutorial.classList.remove("oculto");
     iniciarTutorial(RETRATOS["El Mentor"], () => {
       btnSaltarTutorial.classList.add("oculto");
+      considerarSubtramaEmpleo();
     });
+  } else {
+    considerarSubtramaEmpleo();
   }
 }
 
@@ -1112,6 +1171,7 @@ async function cargarPartida() {
     pintarHubDesdeEstadoJuego(estadoJuego);
     await cargarPerks();
     setStatus("Partida cargada.", "ok");
+    considerarSubtramaEmpleo();
   } catch (err) {
     setStatus(String(err), "error");
   }
@@ -1170,14 +1230,23 @@ async function ejecutarCerrarDia() {
     renderBandeja(estadoTurno);
 
     const cobrado = Number(estadoTurno.dinero_cobrado) || 0;
+    const nomina = Number(estadoTurno.sueldo_diario) || 0;
     if (cobrado > 0) {
       mostrarPopBadge(dineroHubPopEl, `+$${cobrado}`);
-      setStatus(`Día cerrado. Cobras $${cobrado}. Turno nuevo.`, "ok");
+      const detalleNomina =
+        nomina > 0 ? ` (incluye nómina $${nomina})` : rangoActual === "Becario" ? " (practicante: sin nómina)" : "";
+      setStatus(`Día cerrado. Cobras $${cobrado}${detalleNomina}. Turno nuevo.`, "ok");
     } else {
-      setStatus("Día cerrado. Turno nuevo.", "ok");
+      setStatus(
+        rangoActual === "Becario"
+          ? "Día cerrado. Sin nómina (practicante). Turno nuevo."
+          : "Día cerrado. Turno nuevo.",
+        "ok"
+      );
     }
     refrescarHumorOficinaPorNuevoDia();
     sfxCierreDia();
+    await considerarSubtramaEmpleo();
   } finally {
     cerrandoDia = false;
   }
@@ -1200,6 +1269,7 @@ async function confirmarTransicionAgencia() {
     ticketActivoId = null;
     renderBandeja(estadoTurno);
     setStatus("Bienvenido a Postafeta.", "ok");
+    await considerarSubtramaEmpleo();
   } catch (err) {
     setStatus(String(err), "error");
   }
@@ -1625,6 +1695,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   rangoPerfilEl = document.querySelector("#rango-perfil");
   progresoRangoActualTextoEl = document.querySelector("#progreso-rango-actual-texto");
   progresoRangoSiguienteEl = document.querySelector("#progreso-rango-siguiente");
+  sueldoPerfilEl = document.querySelector("#sueldo-perfil");
+  sueldoPerfilNotaEl = document.querySelector("#sueldo-perfil-nota");
+  actualizarSueldoPerfil(0);
   tooltipGlobal = document.querySelector("#tooltip-global");
   empresaNombreEl = document.querySelector("#empresa-nombre");
   empresaDescripcionEl = document.querySelector("#empresa-descripcion");
@@ -1647,6 +1720,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.querySelector(".fax-oficina")?.addEventListener("click", () => {
     rotarFaxOficina(true);
   });
+  const hubDelsy = document.querySelector("#hub-delsy-retrato");
+  if (hubDelsy) hubDelsy.innerHTML = retratoDelsyHabla();
   reputacionHubPopEl = document.querySelector("#reputacion-hub-pop");
   actualizarRetratoJugador();
   rotarAvisoOficina(false);
@@ -1674,6 +1749,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     mostrarPantalla("hub");
     aplicarFeedbackEnHub();
     notificarCierreScoring();
+    considerarSubtramaEmpleo();
   });
   document.querySelector("#btn-confirmar-agencia").addEventListener("click", confirmarTransicionAgencia);
   document.querySelector("#btn-iniciar-partida").addEventListener("click", iniciarPartida);
@@ -1723,7 +1799,19 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
   document.querySelector("#debug-aplicar")?.addEventListener("click", () => aplicarDebugEstado(false));
   document.querySelector("#debug-forzar-auditor")?.addEventListener("click", () => aplicarDebugEstado(true));
-  document.querySelector("#debug-ciclo-puesto")?.addEventListener("click", ciclarPuestoRetratoDebug);
+  document.querySelector("#debug-ciclo-puesto")?.addEventListener("click", () => {
+    ciclarPuestoRetratoDebug();
+    considerarSubtramaEmpleo();
+  });
+  document.querySelector("#debug-subtrama")?.addEventListener("click", async () => {
+    alternarDebugOverlay(false);
+    const cap = await forzarSiguienteCapituloSubtrama();
+    if (cap?.titulo) setStatus(`Subtrama: ${cap.titulo}`, "ok");
+  });
+  document.querySelector("#debug-subtrama-reset")?.addEventListener("click", () => {
+    reiniciarSubtramaDebug();
+    setStatus("Subtrama reiniciada.", "ok");
+  });
   document.querySelector("#debug-cerrar")?.addEventListener("click", () => alternarDebugOverlay(false));
 
   document.querySelector("#tab-dashboard").addEventListener("click", () => {
@@ -1786,7 +1874,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.addEventListener("keydown", (evento) => {
     if (evento.key !== "Escape") return;
     if (appShell.classList.contains("oculto")) return;
-    if (tutorialActivo()) return;
+    if (tutorialActivo() || subtramaActiva()) return;
     const hayOverlayResultado = !scoringOverlay.classList.contains("oculto");
     const hayOverlayAgencia = !agenciaOverlay.classList.contains("oculto");
     const hayOverlayCerrarDia = cerrarDiaOverlay && !cerrarDiaOverlay.classList.contains("oculto");

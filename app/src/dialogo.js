@@ -52,6 +52,8 @@ function iniciarRevelado() {
     }
     if (indice >= textoCompleto.length) {
       detenerRevelado();
+      const sprite = tarjeta?.querySelector(".sprite-habla");
+      if (sprite) sprite.classList.remove("sprite-habla--hablando");
     }
   }, VELOCIDAD_REVELADO_MS);
 }
@@ -108,9 +110,14 @@ export function mostrarDialogo(retratoSvg, nombre, texto, opciones = {}) {
     </div>
   `;
   elementoTexto = tarjeta.querySelector(".dialogo-texto");
+  const spriteHabla = tarjeta.querySelector(".sprite-habla");
+  if (opciones.hablando !== false && spriteHabla) {
+    spriteHabla.classList.add("sprite-habla--hablando");
+  }
   tarjeta.addEventListener("click", () => {
     if (revelando) {
       completarRevelado();
+      if (spriteHabla) spriteHabla.classList.remove("sprite-habla--hablando");
     } else if (callbackContinuar) {
       callbackContinuar();
     }
@@ -121,6 +128,15 @@ export function mostrarDialogo(retratoSvg, nombre, texto, opciones = {}) {
   document.addEventListener("click", manejarClickDocumento, true);
 
   iniciarRevelado();
+  if (spriteHabla && opciones.hablando !== false) {
+    const detenerBoca = () => spriteHabla.classList.remove("sprite-habla--hablando");
+    const checkFin = setInterval(() => {
+      if (!revelando) {
+        clearInterval(checkFin);
+        detenerBoca();
+      }
+    }, 40);
+  }
 }
 
 export function ocultarDialogo() {

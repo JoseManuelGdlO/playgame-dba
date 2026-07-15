@@ -73,6 +73,11 @@
               </div>
               <div class="tarjeta-perfil-rango" id="rango-perfil">Becario</div>
               <div class="tarjeta-perfil-rango-label">Rango actual</div>
+              <div class="tarjeta-perfil-sueldo">
+                <span class="tarjeta-perfil-sueldo-etiqueta">Sueldo</span>
+                <span id="sueldo-perfil">$0 / día</span>
+                <span id="sueldo-perfil-nota" class="tarjeta-perfil-sueldo-nota">Practicante · sin nómina</span>
+              </div>
             </div>
 
             <div class="tarjeta-progreso-carrera">
@@ -106,6 +111,15 @@
                 <p data-postit-texto></p>
               </div>
             </div>
+
+            <aside class="tarjeta-delsy" aria-label="Delsy · recepción">
+              <div class="tarjeta-delsy-retrato" id="hub-delsy-retrato"></div>
+              <div class="tarjeta-delsy-texto">
+                <div class="tarjeta-delsy-nombre">Delsy</div>
+                <p class="tarjeta-delsy-rol">Recepción · y lo demás</p>
+                <p class="tarjeta-delsy-nota">Si miras a cámara, ella también. Es contagioso.</p>
+              </div>
+            </aside>
           </div>
 
           <section class="bandeja hub-columna-bandeja">
@@ -233,6 +247,8 @@
           <button type="button" id="debug-aplicar">Aplicar y refrescar</button>
           <button type="button" id="debug-forzar-auditor">Forzar Auditor</button>
           <button type="button" id="debug-ciclo-puesto">Cambiar puesto (retrato)</button>
+          <button type="button" id="debug-subtrama">Siguiente escena Delsy</button>
+          <button type="button" id="debug-subtrama-reset">Reset subtrama</button>
           <button type="button" id="debug-cerrar">Cerrar</button>
         </div>
         <p id="debug-retrato-etapa" class="debug-nota">Retrato: según progreso real.</p>

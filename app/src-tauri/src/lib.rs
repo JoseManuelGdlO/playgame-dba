@@ -51,6 +51,8 @@ struct DirectorioGuardado(std::path::PathBuf);
 struct EstadoJuegoView {
     dinero: i64,
     dinero_pendiente: i64,
+    /// Nómina fija del puesto al cerrar el día (0 si es Becario/practicante).
+    sueldo_diario: i64,
     reputacion: f64,
     rango: tickets::Rango,
     presupuesto_restante: u32,
@@ -69,6 +71,7 @@ impl EstadoJuegoView {
         EstadoJuegoView {
             dinero: jugador.dinero,
             dinero_pendiente: jugador.dinero_pendiente,
+            sueldo_diario: sueldo_del_puesto(jugador, manejado.empresa),
             reputacion: jugador.reputacion,
             rango: jugador.rango,
             presupuesto_restante: manejado.actual.presupuesto_restante,
@@ -201,20 +204,35 @@ impl TurnoManejado {
     /// cuando el turno normal se agota o se vacía).
     fn actualizar_fase(&mut self, ascendio: bool, jugador: &mut economia::EstadoJugador) {
         if ascendio {
-            // El tramo de Becario termina: se cobra el sueldo antes del mini-boss.
-            let _ = jugador.cobrar_sueldo_del_dia();
+            // El tramo de Becario termina: se cobra antes del mini-boss.
+            let nomina = sueldo_del_puesto(jugador, self.empresa);
+            let _ = jugador.cobrar_sueldo_del_dia(nomina);
             let (turno_mini_boss, _) = turno::EstadoTurno::nuevo(&tickets::mini_boss_hospital_arcangel(), 0);
             self.actual = turno_mini_boss;
             self.fase = FaseArco::MiniBoss;
         } else if self.fase == FaseArco::MiniBoss && self.actual.pendientes.is_empty() {
-            let _ = jugador.cobrar_sueldo_del_dia();
+            let nomina = sueldo_del_puesto(jugador, self.empresa);
+            let _ = jugador.cobrar_sueldo_del_dia(nomina);
             self.fase = FaseArco::ArcoCompletado;
         } else if self.fase == FaseArco::TrabajoNormal
             && (self.actual.pendientes.is_empty() || self.actual.turno_agotado())
         {
-            let _ = jugador.cobrar_sueldo_del_dia();
+            let nomina = sueldo_del_puesto(jugador, self.empresa);
+            let _ = jugador.cobrar_sueldo_del_dia(nomina);
             self.escalar_y_avanzar(jugador);
         }
+    }
+}
+
+/// Nómina del puesto: Becario (practicante) = 0; Auxiliar cobra; Postafeta paga un poco más.
+fn sueldo_del_puesto(jugador: &economia::EstadoJugador, empresa: db::Company) -> i64 {
+    let base = jugador.sueldo_diario();
+    if base == 0 {
+        return 0;
+    }
+    match empresa {
+        db::Company::Postafeta => base + 40,
+        db::Company::HospitalArcangel => base,
     }
 }
 
@@ -233,6 +251,7 @@ struct EstadoTurnoView {
     intentos_limite: u32,
     dinero: i64,
     dinero_pendiente: i64,
+    sueldo_diario: i64,
     reputacion: f64,
     /// Cuánto se cobró en este cierre de día (`cerrar_dia`); 0 en otros refrescos.
     dinero_cobrado: i64,
@@ -278,6 +297,7 @@ fn vista_turno_con_cobro(
         intentos_limite,
         dinero: jugador.dinero,
         dinero_pendiente: jugador.dinero_pendiente,
+        sueldo_diario: sueldo_del_puesto(jugador, manejado.empresa),
         reputacion: jugador.reputacion,
         dinero_cobrado,
     }
@@ -541,7 +561,8 @@ fn cerrar_dia(
     // no hace nada.
     let mut dinero_cobrado = 0;
     if manejado.fase == FaseArco::TrabajoNormal {
-        dinero_cobrado = estado.cobrar_sueldo_del_dia();
+        let nomina = sueldo_del_puesto(&estado, manejado.empresa);
+        dinero_cobrado = estado.cobrar_sueldo_del_dia(nomina);
         manejado.escalar_y_avanzar(&mut estado);
     }
     autoguardar(&dir.0, &estado, &manejado);

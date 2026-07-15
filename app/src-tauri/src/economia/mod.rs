@@ -107,6 +107,15 @@ pub struct EstadoJugador {
 /// desbloquean cerca del climax o justo después).
 pub(crate) const UMBRAL_ASCENSO_AUXILIAR: f64 = 2.5;
 
+/// Sueldo fijo del puesto al cerrar el día (además de lo ganado en tickets).
+/// Becario = 0: es practicante y no cobra nómina.
+pub fn sueldo_diario_por_rango(rango: Rango) -> i64 {
+    match rango {
+        Rango::Becario => 0,
+        Rango::AuxiliarDeSistemas => 100,
+    }
+}
+
 impl EstadoJugador {
     /// Aplica el resultado de una entrega: reputación y XP al momento;
     /// el dinero se acumula en `dinero_pendiente` y se cobra al cerrar el día.
@@ -128,13 +137,18 @@ impl EstadoJugador {
         }
     }
 
-    /// Pasa el sueldo del día a la billetera y lo deja en cero. Devuelve
-    /// cuánto se cobró (0 si no había nada pendiente).
-    pub fn cobrar_sueldo_del_dia(&mut self) -> i64 {
-        let pago = self.dinero_pendiente;
-        self.dinero += pago;
+    /// Cobra tickets pendientes + `sueldo_puesto` (nómina del rango) y deja
+    /// el pendiente en cero. Devuelve el total que entró a la billetera.
+    pub fn cobrar_sueldo_del_dia(&mut self, sueldo_puesto: i64) -> i64 {
+        let de_tickets = self.dinero_pendiente;
         self.dinero_pendiente = 0;
+        let pago = de_tickets + sueldo_puesto.max(0);
+        self.dinero += pago;
         pago
+    }
+
+    pub fn sueldo_diario(&self) -> i64 {
+        sueldo_diario_por_rango(self.rango)
     }
 
     /// Etapa 10: señal de que la reputación ya cruzó el umbral de ascenso —
@@ -395,12 +409,23 @@ mod tests {
         estado.dinero_pendiente = 150;
         estado.dinero = 50;
 
-        let cobrado = estado.cobrar_sueldo_del_dia();
+        let cobrado = estado.cobrar_sueldo_del_dia(0);
 
         assert_eq!(cobrado, 150);
         assert_eq!(estado.dinero, 200);
         assert_eq!(estado.dinero_pendiente, 0);
-        assert_eq!(estado.cobrar_sueldo_del_dia(), 0);
+        assert_eq!(estado.cobrar_sueldo_del_dia(0), 0);
+    }
+
+    fn sueldo_diario_becario_es_cero_y_auxiliar_cobra_nomina() {
+        assert_eq!(sueldo_diario_por_rango(Rango::Becario), 0);
+        assert_eq!(sueldo_diario_por_rango(Rango::AuxiliarDeSistemas), 100);
+
+        let mut estado = EstadoJugador::default();
+        estado.rango = Rango::AuxiliarDeSistemas;
+        estado.dinero_pendiente = 40;
+        let cobrado = estado.cobrar_sueldo_del_dia(estado.sueldo_diario());
+        assert_eq!(cobrado, 140, "tickets + nómina del puesto");
     }
 
     #[test]
