@@ -444,8 +444,36 @@ let ticketActivoArquetipos = [];
 let wikiArticuloActual = "select";
 
 const UMBRAL_ASCENSO_AUXILIAR = 2.5;
+const UMBRAL_SCORE_EXCELENTE = 85;
+const UMBRAL_VELOCIDAD_EXCELENTE = 95;
+const PRESUPUESTO_ALERTA = 20;
 
-/** @type {{ titulo: string, pass: boolean, deltaDinero: number, deltaRep: number, ascendio: boolean } | null} */
+/** @param {{ pass: boolean, puntaje_correctitud: number, puntaje_velocidad: number, puntaje_practicas: number }} score */
+function clasificarTierScore(score) {
+  if (!score.pass) return "fail";
+  const promedio =
+    (Number(score.puntaje_correctitud) +
+      Number(score.puntaje_velocidad) +
+      Number(score.puntaje_practicas)) /
+    3;
+  if (promedio >= UMBRAL_SCORE_EXCELENTE || Number(score.puntaje_velocidad) >= UMBRAL_VELOCIDAD_EXCELENTE) {
+    return "excelente";
+  }
+  return "pass";
+}
+
+/** @param {{ puntaje_correctitud: number, puntaje_velocidad: number, puntaje_practicas: number }} score */
+function metricaMasDebil(score) {
+  const pares = [
+    ["correctitud", Number(score.puntaje_correctitud)],
+    ["practicas", Number(score.puntaje_practicas)],
+    ["velocidad", Number(score.puntaje_velocidad)],
+  ];
+  pares.sort((a, b) => a[1] - b[1]);
+  return pares[0][0];
+}
+
+/** @type {{ titulo: string, pass: boolean, tier: string, deltaDinero: number, deltaRep: number, ascendio: boolean } | null} */
 let ultimoFeedback = null;
 let modoBossActivo = false;
 let bannerBossMostrado = false;
@@ -962,7 +990,9 @@ function mostrarPopBadge(el, texto, esNegativo = false) {
 
 function mostrarToastTicket(feedback) {
   if (!ticketToastEl || !feedback) return;
-  const lineaResultado = feedback.pass ? "Resuelto" : "Incorrecto";
+  const tier = feedback.tier || (feedback.pass ? "pass" : "fail");
+  const lineaResultado =
+    tier === "excelente" ? "Query limpia" : tier === "pass" ? "Resuelto" : "Incorrecto";
   const partes = [`${lineaResultado} · ${feedback.titulo}`];
   if (feedback.pass) {
     const repTxt = Number(feedback.deltaRep).toFixed(1);
@@ -973,7 +1003,10 @@ function mostrarToastTicket(feedback) {
     partes.push(`${dineroTxt} · +${repTxt} rep`);
   }
   ticketToastEl.textContent = partes.join("\n");
-  ticketToastEl.classList.toggle("es-fallo", !feedback.pass);
+  ticketToastEl.classList.remove("es-excelente", "es-pass", "es-fallo");
+  ticketToastEl.classList.add(
+    tier === "excelente" ? "es-excelente" : tier === "pass" ? "es-pass" : "es-fallo"
+  );
   ticketToastEl.classList.remove("oculto");
   if (toastTimer) clearTimeout(toastTimer);
   toastTimer = setTimeout(() => ticketToastEl.classList.add("oculto"), 3000);
@@ -1376,9 +1409,11 @@ async function submitTicket() {
       actualizarEtiquetaIntentos(ticketActivoId);
       return false;
     }
+    const tier = clasificarTierScore(score);
     ultimoFeedback = {
       titulo: ticketActivoMotivo || ticketActivoId || "Ticket",
       pass: score.pass,
+      tier,
       deltaDinero: score.dinero_ganado,
       deltaRep: score.reputacion_ganada,
       ascendio: score.ascendio,
