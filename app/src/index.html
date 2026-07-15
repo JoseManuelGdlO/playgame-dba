@@ -91,12 +91,33 @@
             <div class="tarjeta-equipados">
               <p id="perks-equipados-msg"></p>
             </div>
+
+            <div class="hub-postits" aria-label="Notas de la oficina">
+              <div class="nota-postit nota-amarilla" style="--rot: -3deg">
+                <span class="nota-postit-titulo" data-postit-titulo>IMPORTANTE</span>
+                <p data-postit-texto></p>
+              </div>
+              <div class="nota-postit nota-rosa" style="--rot: 2.5deg">
+                <span class="nota-postit-titulo" data-postit-titulo>RRHH</span>
+                <p data-postit-texto></p>
+              </div>
+              <div class="nota-postit nota-menta" style="--rot: -1.5deg">
+                <span class="nota-postit-titulo" data-postit-titulo>IT</span>
+                <p data-postit-texto></p>
+              </div>
+            </div>
           </div>
 
           <section class="bandeja hub-columna-bandeja">
             <div class="tarjeta-empresa">
               <div class="tarjeta-empresa-nombre" id="empresa-nombre">Hospital Arcángel</div>
               <p class="tarjeta-empresa-descripcion" id="empresa-descripcion"></p>
+            </div>
+            <div class="aviso-oficina" aria-live="polite">
+              <div class="aviso-oficina-chincheta" aria-hidden="true"></div>
+              <div class="aviso-oficina-etiqueta">Aviso del tablero</div>
+              <p id="aviso-oficina-texto" class="aviso-oficina-texto"></p>
+              <p class="aviso-oficina-firma">— Administración (en teoría)</p>
             </div>
             <div class="panel-arco" id="panel-arco">
               <div class="panel-arco-camino" id="panel-arco-camino">
@@ -123,6 +144,15 @@
             <div id="perk-slots" class="perk-slots" aria-hidden="true"></div>
             <p id="perk-slots-label" class="perk-slots-label"></p>
             <ul id="lista-perks"></ul>
+
+            <aside class="fax-oficina" aria-label="Fax de la oficina" title="Click para otro fax">
+              <div class="fax-oficina-cabeza">
+                <span class="fax-oficina-sello">FAX</span>
+                <span class="fax-oficina-meta">pág. 1/1 · borroso a propósito</span>
+              </div>
+              <p id="fax-oficina-texto" class="fax-oficina-texto"></p>
+              <p class="fax-oficina-pie">Recibido en recepción · nadie lo leyó</p>
+            </aside>
           </section>
         </div>
 

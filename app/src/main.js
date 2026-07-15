@@ -108,7 +108,7 @@ const EMPRESA_INFO = {
   HospitalArcangel: {
     nombre: "Hospital Arcángel",
     descripcion:
-      "Hospital Arcángel es una cadena hospitalaria donde cada expediente pasa por al menos tres departamentos antes de llegar a quien realmente lo necesita. Nadie recuerda quién aprobó el sistema actual, pero todos coinciden en que cambiarlo tomaría más tiempo del que llevan usándolo.",
+      "Hospital Arcángel es una cadena hospitalaria donde cada expediente pasa por al menos tres departamentos antes de llegar a quien realmente lo necesita. Nadie recuerda quién aprobó el sistema actual, pero todos coinciden en que cambiarlo tomaría más tiempo del que llevan usándolo. Hay un letrero de “sonrían a la cámara” junto a la cafetera — nadie sabe a quién miran.",
   },
   Postafeta: {
     nombre: "Postafeta",
@@ -116,6 +116,126 @@ const EMPRESA_INFO = {
       "Postafeta mueve paquetes por todo el país con una precisión sorprendente, considerando que nadie ha visto un manual de procesos desde hace años. Las decisiones importantes se toman en un canal de Slack administrado por un becario invisible llamado Kevin — todo viene firmado \"- Kevin\".",
   },
 };
+
+/** Guinos de humor de oficina (estilo mockumentary) para el tablero del hub. */
+const AVISOS_OFICINA = [
+  "Prohibido declarar quiebra en voz alta en la sala de juntas. Contabilidad se pone raro.",
+  "Recordatorio: el robo de identidad no es un chiste… ni una estrategia de login.",
+  "Hoy NO es Día del Pretzel. Mañana tampoco. El calendario de eventos está “en revisión”.",
+  "Si tu query tarda mucho, no la mires fijamente a cámara. No ayuda. (A veces sí, un poco.)",
+  "Se busca dueño de un Tupperware con chili. Kevin jura que no fue él. Kevin siempre jura eso.",
+  "La impresora dice PC LOAD LETTER otra vez. IT aclara que no es un hechizo.",
+  "Premio inventado del mes: “Mejor SELECT * … y arrepentirse después”. El ganador se castiga solo.",
+  "Nota de seguridad: no cierres el día con la esperanza de que los tickets se resuelvan solos. No lo harán.",
+  "¿Sala de juntas ocupada? Alguien está “en una reunión”. La reunión es mirar el techo 20 minutos.",
+  "Política informal: si no cabe en un Post-it, probablemente tampoco cabe en el alcance del ticket.",
+  "Aviso de cumplimiento: dejar tickets a medias baja reputación. Como dejar el microondas sin limpiar.",
+  "Tip del Mentor: leer el ticket dos veces supera a reescribir el mismo SQL triste cuatro veces.",
+  "Si alguien firma “- Kevin”, créanle. O no. Nadie ha confirmado que Kevin exista.",
+  "La cafetera está “fuera de servicio por sentimientos”. Usen el café cargado (perk) con moderación.",
+];
+
+const POSTITS_OFICINA = [
+  {
+    titulo: "IMPORTANTE",
+    textos: [
+      "Si dices “ASAP” en un ticket, se entiende como “cuando puedas… o nunca”.",
+      "“Urgente” significa: urgente para ellos, opcional para tu presupuesto de tiempo.",
+      "No marques el ticket como resuelto si solo “casi” funciona. Casi no es un JOIN.",
+      "Antes de preguntar: mira el Wiki SQL. Después pregunta. O mira otra vez el Wiki.",
+    ],
+  },
+  {
+    titulo: "RRHH",
+    textos: [
+      "El “Día del Pretzel” se reprogramó. Otra vez. No pregunten por qué.",
+      "Foto del gafete: sonrían. Si no pueden, al menos no miren a la cámara como Michael.",
+      "El microondas no es un armario. Empaqueten, etiqueten, y no calienten pescado. Nunca.",
+      "Premios Dundies de TI: categoría “Better Call SELECT”. No hay estatua. Solo pena.",
+    ],
+  },
+  {
+    titulo: "IT",
+    textos: [
+      "Osos. Remolachas. Consultas SQL. (En ese orden de prioridad.)",
+      "Si reinicias el router y “se arregla”, no digas que fue magia. Documenta el ticket.",
+      "Threat Level Midnight 2: ahora con más JOINs y la misma calidad de diálogo.",
+      "El jefe quiere un mug de “World’s Best Boss”. IT solo puede imprimir etiquetas. Improvisen.",
+    ],
+  },
+];
+
+const FAXES_OFICINA = [
+  "ASUNTO: casting interno — Threat Level Midnight. Se buscan extras que sepan ordenar por A→Z. Traer suéter negro.",
+  "URGENTE: desapareció la taza “World’s Best Boss”. Si la encuentran, no la usen. Está… sentimentalmente contaminada.",
+  "De: Contabilidad / Para: Todos — “¿Quién gastó en pasta y salsa para un “club de italiano”? Respondan o lo cargamos a Oscar.”",
+  "FAX ilegible (como siempre): algo sobre remolachas, una granja y “respuesta correcta = Battlestar… wait, SQL”.",
+  "Recordatorio de seguridad: no compartan contraseñas. Compartir almuerzo tampoco, pero eso es menos grave.",
+  "Convocatoria: reunión de 5 minutos que durará 47. Traer café. No traer ideas nuevas sin SQL de respaldo.",
+  "Atención Postafeta: si el mensaje dice “- Kevin”, archívenlo. Si no dice “- Kevin”, sospechen.",
+  "Nota del Mentor (tachada): “dejar de enseñar con metáforas de oficina”. (Nota nueva: seguir igual.)",
+];
+
+let avisoOficinaTextoEl;
+let faxOficinaTextoEl;
+let indiceAvisoOficina = 0;
+let indiceFaxOficina = 0;
+/** @type {number[]} */
+let indicesPostitDia = [0, 0, 0];
+
+function elegirIndiceDistinto(largo, anterior) {
+  if (largo <= 1) return 0;
+  let siguiente = anterior;
+  while (siguiente === anterior) {
+    siguiente = Math.floor(Math.random() * largo);
+  }
+  return siguiente;
+}
+
+function rotarAvisoOficina(forzarSiguiente = false) {
+  if (!avisoOficinaTextoEl || AVISOS_OFICINA.length === 0) return;
+  if (forzarSiguiente) {
+    indiceAvisoOficina = (indiceAvisoOficina + 1) % AVISOS_OFICINA.length;
+  } else {
+    indiceAvisoOficina = Math.floor(Math.random() * AVISOS_OFICINA.length);
+  }
+  avisoOficinaTextoEl.textContent = AVISOS_OFICINA[indiceAvisoOficina];
+}
+
+function rotarPostitsOficina(nuevoDia = false) {
+  const notas = document.querySelectorAll(".hub-postits .nota-postit");
+  notas.forEach((nota, i) => {
+    const pool = POSTITS_OFICINA[i];
+    if (!pool) return;
+    const tituloEl = nota.querySelector("[data-postit-titulo]");
+    const textoEl = nota.querySelector("[data-postit-texto]");
+    if (tituloEl) tituloEl.textContent = pool.titulo;
+    if (!textoEl) return;
+    if (nuevoDia) {
+      indicesPostitDia[i] = elegirIndiceDistinto(pool.textos.length, indicesPostitDia[i] ?? 0);
+    } else if (textoEl.textContent.trim() === "") {
+      indicesPostitDia[i] = Math.floor(Math.random() * pool.textos.length);
+    }
+    textoEl.textContent = pool.textos[indicesPostitDia[i]];
+  });
+}
+
+function rotarFaxOficina(forzarSiguiente = false) {
+  if (!faxOficinaTextoEl || FAXES_OFICINA.length === 0) return;
+  if (forzarSiguiente) {
+    indiceFaxOficina = (indiceFaxOficina + 1) % FAXES_OFICINA.length;
+  } else {
+    indiceFaxOficina = Math.floor(Math.random() * FAXES_OFICINA.length);
+  }
+  faxOficinaTextoEl.textContent = FAXES_OFICINA[indiceFaxOficina];
+}
+
+/** Al cerrar el día: refresca todos los guinos de oficina del hub. */
+function refrescarHumorOficinaPorNuevoDia() {
+  rotarAvisoOficina(true);
+  rotarPostitsOficina(true);
+  rotarFaxOficina(true);
+}
 
 const POSICIONES_TABLAS = {
   HospitalArcangel: {
@@ -906,6 +1026,9 @@ function pintarHubDesdeEstadoJuego(estadoJuego) {
   actualizarReputacion(estadoJuego.reputacion.toFixed(1));
   renderRango(estadoJuego.rango);
   renderBandeja(estadoJuego);
+  rotarAvisoOficina(false);
+  rotarPostitsOficina(false);
+  rotarFaxOficina(false);
   ticketActivoId = null;
   actualizarEtiquetaIntentos(null);
   mostrarPantalla("hub");
@@ -1053,6 +1176,7 @@ async function ejecutarCerrarDia() {
     } else {
       setStatus("Día cerrado. Turno nuevo.", "ok");
     }
+    refrescarHumorOficinaPorNuevoDia();
     sfxCierreDia();
   } finally {
     cerrandoDia = false;
@@ -1515,8 +1639,19 @@ window.addEventListener("DOMContentLoaded", async () => {
   dineroPendienteHubEl = document.querySelector("#dinero-pendiente-hub");
   retratoJugadorEl = document.querySelector("#retrato-jugador");
   debugRetratoEtiquetaEl = document.querySelector("#debug-retrato-etapa");
+  avisoOficinaTextoEl = document.querySelector("#aviso-oficina-texto");
+  faxOficinaTextoEl = document.querySelector("#fax-oficina-texto");
+  document.querySelector(".aviso-oficina")?.addEventListener("click", () => {
+    rotarAvisoOficina(true);
+  });
+  document.querySelector(".fax-oficina")?.addEventListener("click", () => {
+    rotarFaxOficina(true);
+  });
   reputacionHubPopEl = document.querySelector("#reputacion-hub-pop");
   actualizarRetratoJugador();
+  rotarAvisoOficina(false);
+  rotarPostitsOficina(false);
+  rotarFaxOficina(false);
   ticketIntentosEl = document.querySelector("#ticket-intentos");
 
   await mostrarMenu();

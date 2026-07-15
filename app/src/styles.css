@@ -977,8 +977,7 @@ tr:nth-child(even) td {
 }
 
 .hub-columna-bandeja,
-.hub-columna-perfil,
-.hub-columna-perks {
+.hub-columna-perfil {
   min-width: 0;
   min-height: 0;
   max-height: 100%;
@@ -987,7 +986,35 @@ tr:nth-child(even) td {
 }
 
 .hub-columna-perks {
+  min-width: 0;
+  min-height: 0;
+  max-height: 100%;
   padding-right: 0.1rem;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.hub-columna-perks > h2,
+.hub-columna-perks > .perk-slots,
+.hub-columna-perks > .perk-slots-label {
+  flex: 0 0 auto;
+}
+
+.hub-columna-perks > #lista-perks {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-bottom: 0.55rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.hub-columna-perks > #lista-perks::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .barra-pestanas {
@@ -1317,6 +1344,191 @@ button,
   font-size: 0.6rem;
   color: var(--hub-ink);
   line-height: 1.4;
+}
+
+.hub-postits {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+.nota-postit {
+  position: relative;
+  padding: 0.7rem 0.75rem 0.65rem;
+  border-radius: 1px;
+  box-shadow: 1px 2px 0 rgba(42, 32, 24, 0.18), 2px 4px 10px rgba(0, 0, 0, 0.12);
+  transform: rotate(var(--rot, 0deg));
+  font-family: "Comic Sans MS", "Segoe Print", "Bradley Hand", cursive, sans-serif;
+  line-height: 1.35;
+}
+
+.nota-postit::before {
+  content: "";
+  position: absolute;
+  top: -0.2rem;
+  left: 50%;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-left: -0.275rem;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ddd 0 35%, #8a3040 36% 100%);
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+}
+
+.nota-postit-titulo {
+  display: block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 0.25rem;
+  opacity: 0.75;
+  font-family: "Segoe UI", sans-serif;
+}
+
+.nota-postit p {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #2a2018;
+}
+
+.nota-amarilla {
+  background: linear-gradient(180deg, #fff3a1 0%, #f5e27a 100%);
+}
+
+.nota-rosa {
+  background: linear-gradient(180deg, #ffc4d6 0%, #f5a8c0 100%);
+}
+
+.nota-menta {
+  background: linear-gradient(180deg, #c8f0d8 0%, #9fd9b4 100%);
+}
+
+.aviso-oficina {
+  position: relative;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(120, 90, 55, 0.08) 0 2px,
+      transparent 2px 4px
+    ),
+    linear-gradient(165deg, #c9a67a 0%, #b8956a 55%, #a9845c 100%);
+  border: 1px solid rgba(70, 45, 25, 0.45);
+  border-radius: 2px;
+  padding: 0.85rem 0.95rem 0.7rem;
+  margin-bottom: 0.95rem;
+  box-shadow: 2px 3px 8px rgba(0, 0, 0, 0.2);
+  color: #2a2018;
+  cursor: pointer;
+}
+
+.aviso-oficina:hover .aviso-oficina-texto {
+  background: rgba(255, 252, 240, 0.95);
+}
+
+.aviso-oficina-chincheta {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.55rem;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #eee 0 30%, #b03030 32% 100%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.aviso-oficina-etiqueta {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #5a3d28;
+  margin-bottom: 0.35rem;
+  font-weight: 700;
+}
+
+.aviso-oficina-texto {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.4;
+  color: #1f1812;
+  background: rgba(255, 248, 230, 0.88);
+  border: 1px dashed rgba(70, 45, 25, 0.35);
+  padding: 0.55rem 0.65rem;
+  min-height: 2.6em;
+}
+
+.aviso-oficina-firma {
+  margin: 0.35rem 0 0;
+  font-size: 0.68rem;
+  color: #5a3d28;
+  font-style: italic;
+  text-align: right;
+}
+
+.fax-oficina {
+  flex: 0 0 auto;
+  margin-top: auto;
+  margin-bottom: 0.15rem;
+  padding: 0.55rem 0.65rem 0.45rem;
+  background:
+    repeating-linear-gradient(
+      180deg,
+      transparent 0 14px,
+      rgba(80, 60, 40, 0.06) 14px 15px
+    ),
+    linear-gradient(180deg, #f7efd8 0%, #efe2c0 100%);
+  border: 1px solid rgba(42, 32, 24, 0.35);
+  box-shadow: 2px 3px 0 rgba(42, 32, 24, 0.12), 3px 5px 12px rgba(0, 0, 0, 0.18);
+  transform: rotate(1.4deg);
+  cursor: pointer;
+  color: #2a2018;
+}
+
+.fax-oficina:hover {
+  filter: brightness(1.03);
+}
+
+.fax-oficina-cabeza {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+  border-bottom: 1px dashed rgba(42, 32, 24, 0.35);
+  padding-bottom: 0.3rem;
+}
+
+.fax-oficina-sello {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #8a2a2a;
+  border: 2px solid #8a2a2a;
+  padding: 0.08rem 0.35rem;
+  transform: rotate(-4deg);
+}
+
+.fax-oficina-meta {
+  font-size: 0.58rem;
+  color: #6b5a42;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+}
+
+.fax-oficina-texto {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.35;
+  font-family: "Courier New", Courier, monospace;
+  min-height: 0;
+}
+
+.fax-oficina-pie {
+  margin: 0.45rem 0 0;
+  font-size: 0.62rem;
+  color: #6b5a42;
+  font-style: italic;
+  text-align: right;
 }
 
 .tarjeta-empresa {
