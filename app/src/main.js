@@ -10,6 +10,8 @@ import {
   alternarMusica,
   alternarEfectos,
   establecerModoMusica,
+  establecerVolumenMusica,
+  obtenerVolumenMusica,
 } from "./audio.js";
 import {
   iniciarTutorial,
@@ -1996,6 +1998,10 @@ window.addEventListener("DOMContentLoaded", async () => {
   ventanaConsolaEl = document.querySelector("#pantalla-consola .ventana-terminal");
   btnMuteMusica = document.querySelector("#btn-mute-musica");
   btnMuteEfectos = document.querySelector("#btn-mute-efectos");
+  const sliderVolumenMusica = document.querySelector("#slider-volumen-musica");
+  if (sliderVolumenMusica) {
+    sliderVolumenMusica.value = String(Math.round(obtenerVolumenMusica() * 100));
+  }
   btnCerrarScoring = document.querySelector("#btn-cerrar-scoring");
   btnSaltarTutorial = document.querySelector("#btn-saltar-tutorial");
   headerAppShell = document.querySelector("#header-app-shell");
@@ -2135,12 +2141,16 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   btnMuteMusica.addEventListener("click", () => {
     const activa = alternarMusica();
-    btnMuteMusica.textContent = activa ? "🔊" : "🔇";
+    btnMuteMusica.textContent = activa ? "🔊 Música" : "🔇 Música";
   });
 
   btnMuteEfectos.addEventListener("click", () => {
     const activos = alternarEfectos();
-    btnMuteEfectos.textContent = activos ? "🔊" : "🔇";
+    btnMuteEfectos.textContent = activos ? "🔊 Efectos" : "🔇 Efectos";
+  });
+
+  sliderVolumenMusica?.addEventListener("input", () => {
+    establecerVolumenMusica(Number(sliderVolumenMusica.value) / 100);
   });
 
   btnSaltarTutorial.addEventListener("click", () => {

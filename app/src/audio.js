@@ -2,18 +2,22 @@ let contexto = null;
 let musicaSilenciada = false;
 let efectosSilenciados = false;
 let ambienteIniciado = false;
-let busAmbiente = null;
-let indicePatronAmbiente = 0;
-
-const PATRON_AMBIENTE_HZ = [130.81, 164.81, 196.0, 164.81];
-const DURACION_NOTA_AMBIENTE_MS = 700;
-const FRECUENCIA_PAD_HZ = 65.41;
-
-const PATRON_BOSS_HZ = [110, 110, 130.81, 98, 110, 82.41];
-const DURACION_NOTA_BOSS_MS = 420;
-const FRECUENCIA_PAD_BOSS_HZ = 55;
-
 let modoMusica = "ambiente"; // "ambiente" | "boss"
+let volumenMusica = 0.7;
+let indicePistaAmbiente = 0;
+/** @type {HTMLAudioElement | null} */
+let audioAmbiente = null;
+/** @type {HTMLAudioElement | null} */
+let audioBoss = null;
+
+/** Microwave primero; el resto rota en loop como base ambiental. */
+const PISTAS_AMBIENTE = [
+  "assets/music/microwave-dance.mp3",
+  "assets/music/super-duper.mp3",
+  "assets/music/tech-no-ledge.mp3",
+  "assets/music/froggy-fraud-adventure.mp3",
+];
+const PISTA_BOSS = "assets/music/ashes.mp3";
 
 function obtenerContexto() {
   if (!contexto) {
@@ -25,14 +29,14 @@ function obtenerContexto() {
   return contexto;
 }
 
-function obtenerBusAmbiente() {
-  const ctx = obtenerContexto();
-  if (!busAmbiente) {
-    busAmbiente = ctx.createGain();
-    busAmbiente.gain.value = musicaSilenciada ? 0 : 1;
-    busAmbiente.connect(ctx.destination);
-  }
-  return busAmbiente;
+function volumenMusicaEfectivo() {
+  return musicaSilenciada ? 0 : volumenMusica;
+}
+
+function aplicarVolumenPistas() {
+  const v = volumenMusicaEfectivo();
+  if (audioAmbiente) audioAmbiente.volume = v;
+  if (audioBoss) audioBoss.volume = v;
 }
 
 function tono(frecuenciaHz, duracionMs, tipo, volumen) {
@@ -90,72 +94,106 @@ export function sfxAscenso() {
   secuenciaTonos([523.25, 659.25, 783.99, 1046.5], 200, "triangle", 0.14, 110);
 }
 
-function reproducirNotaAmbiente(frecuenciaHz) {
-  const ctx = obtenerContexto();
-  const bus = obtenerBusAmbiente();
-  const osc = ctx.createOscillator();
-  const ganancia = ctx.createGain();
-  osc.type = modoMusica === "boss" ? "sawtooth" : "triangle";
-  osc.frequency.value = frecuenciaHz;
-  const pico = modoMusica === "boss" ? 0.04 : 0.05;
-  const duracionMs = modoMusica === "boss" ? DURACION_NOTA_BOSS_MS : DURACION_NOTA_AMBIENTE_MS;
-  ganancia.gain.setValueAtTime(0.0001, ctx.currentTime);
-  ganancia.gain.exponentialRampToValueAtTime(pico, ctx.currentTime + 0.05);
-  ganancia.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duracionMs / 1000);
-  osc.connect(ganancia);
-  ganancia.connect(bus);
-  osc.start();
-  osc.stop(ctx.currentTime + duracionMs / 1000);
+function crearAudio(src, { loop = false } = {}) {
+  const el = new Audio(src);
+  el.loop = loop;
+  el.preload = "auto";
+  el.volume = volumenMusicaEfectivo();
+  return el;
 }
 
-function reproducirPadAmbiente(frecuenciaHz, duracionMs) {
-  const ctx = obtenerContexto();
-  const bus = obtenerBusAmbiente();
-  const osc = ctx.createOscillator();
-  const ganancia = ctx.createGain();
-  osc.type = "sine";
-  osc.frequency.value = frecuenciaHz;
-  ganancia.gain.setValueAtTime(0.0001, ctx.currentTime);
-  ganancia.gain.linearRampToValueAtTime(0.03, ctx.currentTime + 0.4);
-  ganancia.gain.linearRampToValueAtTime(0.0001, ctx.currentTime + duracionMs / 1000);
-  osc.connect(ganancia);
-  ganancia.connect(bus);
-  osc.start();
-  osc.stop(ctx.currentTime + duracionMs / 1000);
+function asegurarAudioAmbiente() {
+  if (audioAmbiente) return audioAmbiente;
+  audioAmbiente = crearAudio(PISTAS_AMBIENTE[indicePistaAmbiente], { loop: false });
+  audioAmbiente.addEventListener("ended", () => {
+    if (modoMusica !== "ambiente") return;
+    indicePistaAmbiente = (indicePistaAmbiente + 1) % PISTAS_AMBIENTE.length;
+    audioAmbiente.src = PISTAS_AMBIENTE[indicePistaAmbiente];
+    audioAmbiente.volume = volumenMusicaEfectivo();
+    void audioAmbiente.play().catch(() => {});
+  });
+  return audioAmbiente;
 }
 
-function agendarSiguienteNotaAmbiente() {
-  const patron = modoMusica === "boss" ? PATRON_BOSS_HZ : PATRON_AMBIENTE_HZ;
-  const duracionNota = modoMusica === "boss" ? DURACION_NOTA_BOSS_MS : DURACION_NOTA_AMBIENTE_MS;
-  const padHz = modoMusica === "boss" ? FRECUENCIA_PAD_BOSS_HZ : FRECUENCIA_PAD_HZ;
+function asegurarAudioBoss() {
+  if (audioBoss) return audioBoss;
+  audioBoss = crearAudio(PISTA_BOSS, { loop: true });
+  return audioBoss;
+}
 
-  if (indicePatronAmbiente % patron.length === 0) {
-    reproducirPadAmbiente(padHz, patron.length * duracionNota);
-  }
-  reproducirNotaAmbiente(patron[indicePatronAmbiente % patron.length]);
-  indicePatronAmbiente += 1;
-  setTimeout(agendarSiguienteNotaAmbiente, duracionNota);
+function pausarAmbiente() {
+  if (!audioAmbiente) return;
+  audioAmbiente.pause();
+}
+
+function pausarBoss() {
+  if (!audioBoss) return;
+  audioBoss.pause();
+  audioBoss.currentTime = 0;
+}
+
+function reproducirAmbiente() {
+  const el = asegurarAudioAmbiente();
+  el.volume = volumenMusicaEfectivo();
+  void el.play().catch(() => {});
+}
+
+function reproducirBoss() {
+  const el = asegurarAudioBoss();
+  el.volume = volumenMusicaEfectivo();
+  el.currentTime = 0;
+  void el.play().catch(() => {});
 }
 
 export function establecerModoMusica(modo) {
   if (modo !== "ambiente" && modo !== "boss") return;
   if (modoMusica === modo) return;
   modoMusica = modo;
-  indicePatronAmbiente = 0;
+  if (!ambienteIniciado) return;
+  if (modo === "boss") {
+    pausarAmbiente();
+    reproducirBoss();
+  } else {
+    pausarBoss();
+    reproducirAmbiente();
+  }
 }
 
 export function iniciarAmbiente() {
-  if (ambienteIniciado) return;
+  obtenerContexto();
+  if (ambienteIniciado) {
+    // Reanuda si quedó pausado por política/autoplay o mute parcial.
+    if (modoMusica === "boss") {
+      if (audioBoss?.paused) reproducirBoss();
+    } else if (audioAmbiente?.paused) {
+      reproducirAmbiente();
+    }
+    return;
+  }
   ambienteIniciado = true;
-  obtenerBusAmbiente();
-  agendarSiguienteNotaAmbiente();
+  indicePistaAmbiente = 0;
+  if (modoMusica === "boss") {
+    reproducirBoss();
+  } else {
+    reproducirAmbiente();
+  }
+}
+
+/** @param {number} valor 0–1 */
+export function establecerVolumenMusica(valor) {
+  const n = Number(valor);
+  volumenMusica = Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : volumenMusica;
+  aplicarVolumenPistas();
+  return volumenMusica;
+}
+
+export function obtenerVolumenMusica() {
+  return volumenMusica;
 }
 
 export function alternarMusica() {
   musicaSilenciada = !musicaSilenciada;
-  if (busAmbiente) {
-    busAmbiente.gain.value = musicaSilenciada ? 0 : 1;
-  }
+  aplicarVolumenPistas();
   return !musicaSilenciada;
 }
 

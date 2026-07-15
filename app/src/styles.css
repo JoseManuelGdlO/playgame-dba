@@ -1816,6 +1816,24 @@ button,
   display: flex;
   gap: 0.5rem;
   justify-content: center;
+  flex-wrap: wrap;
+}
+
+.control-volumen-musica {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+  color: #cdd6f4;
+  text-align: left;
+}
+
+.control-volumen-musica input[type="range"] {
+  width: 100%;
+  accent-color: #c9a227;
+  cursor: pointer;
 }
 
 #pausa-overlay .scoring-panel button {

@@ -335,9 +335,20 @@
           <div class="pausa-opciones">
             <p class="pausa-opciones-titulo">Opciones</p>
             <div class="pausa-opciones-audio">
-              <button id="btn-mute-musica" class="control-audio" title="Silenciar música">🔊</button>
-              <button id="btn-mute-efectos" class="control-audio" title="Silenciar efectos">🔊</button>
+              <button id="btn-mute-musica" class="control-audio" title="Silenciar música">🔊 Música</button>
+              <button id="btn-mute-efectos" class="control-audio" title="Silenciar efectos">🔊 Efectos</button>
             </div>
+            <label class="control-volumen-musica" for="slider-volumen-musica">
+              <span>Volumen música</span>
+              <input
+                type="range"
+                id="slider-volumen-musica"
+                min="0"
+                max="100"
+                value="70"
+                step="1"
+              />
+            </label>
           </div>
 
           <button id="btn-salir-pausa">Salir al Menú</button>
