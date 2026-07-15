@@ -530,12 +530,87 @@ function crearTablaFilas(rows) {
   return table;
 }
 
+let presupuestoRestanteActual = 100;
+let ventanaConsolaEl = null;
+let resultRunningEl = null;
+let consolaModoActual = "idle"; // idle | querying | ok | error
+
+function obtenerVentanaConsola() {
+  if (!ventanaConsolaEl) {
+    ventanaConsolaEl = document.querySelector("#pantalla-consola .ventana-terminal");
+  }
+  return ventanaConsolaEl;
+}
+
+function refrescarAlertaConsola() {
+  const ventana = obtenerVentanaConsola();
+  if (!ventana) return;
+  const intentos =
+    ticketActivoId != null
+      ? intentosRestantesPorTicket[ticketActivoId] ?? intentosLimite
+      : intentosLimite;
+  const enAlerta = intentos <= 1 || presupuestoRestanteActual <= PRESUPUESTO_ALERTA;
+  ventana.classList.toggle("consola-alerta", enAlerta);
+}
+
+function setEstadoConsola(modo) {
+  const ventana = obtenerVentanaConsola();
+  if (!ventana) return;
+  consolaModoActual = modo;
+  ventana.classList.remove("consola-idle", "consola-querying", "consola-ok", "consola-error");
+  ventana.classList.add(`consola-${modo}`);
+  refrescarAlertaConsola();
+
+  if (!consolaTitulo) return;
+  const base = ticketActivoId ? `query-path — ${ticketActivoId}` : "query-path";
+  if (modo === "querying") consolaTitulo.textContent = `${base} · ejecutando…`;
+  else if (modo === "ok") consolaTitulo.textContent = `${base} · ok`;
+  else if (modo === "error") consolaTitulo.textContent = `${base} · error`;
+  else consolaTitulo.textContent = base;
+}
+
+function limpiarEstadoConsola() {
+  const ventana = obtenerVentanaConsola();
+  if (ventana) {
+    ventana.classList.remove(
+      "consola-idle",
+      "consola-querying",
+      "consola-ok",
+      "consola-error",
+      "consola-alerta"
+    );
+  }
+  consolaModoActual = "idle";
+  if (resultRunningEl) resultRunningEl.classList.add("oculto");
+  if (resultTable) {
+    resultTable.classList.remove("es-flash", "es-shake-error");
+  }
+}
+
+function mostrarRunningResultado(visible) {
+  if (!resultRunningEl) resultRunningEl = document.querySelector("#result-running");
+  if (!resultRunningEl) return;
+  resultRunningEl.classList.toggle("oculto", !visible);
+}
+
+function reaccionRetrato(kind) {
+  if (!ticketRetrato) return;
+  ticketRetrato.classList.remove("retrato-reaccion-ok", "retrato-reaccion-error");
+  void ticketRetrato.offsetHeight;
+  ticketRetrato.classList.add(
+    kind === "ok" ? "retrato-reaccion-ok" : "retrato-reaccion-error"
+  );
+}
+
 function renderResultados(resultados) {
   resultTable.innerHTML = "";
+  resultTable.classList.remove("es-shake-error");
   const mostrarEtiquetas = resultados.length > 1;
+  let huboError = false;
   resultados.forEach((resultado, indice) => {
     const bloque = document.createElement("div");
-    bloque.className = "resultado-bloque";
+    bloque.className = "resultado-bloque es-stagger";
+    bloque.style.animationDelay = `${indice * 55}ms`;
     if (mostrarEtiquetas) {
       const etiqueta = document.createElement("h3");
       etiqueta.className = "resultado-etiqueta";
@@ -543,6 +618,7 @@ function renderResultados(resultados) {
       bloque.appendChild(etiqueta);
     }
     if (resultado.error) {
+      huboError = true;
       const error = document.createElement("p");
       error.className = "resultado-error";
       error.textContent = resultado.error;
@@ -552,6 +628,17 @@ function renderResultados(resultados) {
     }
     resultTable.appendChild(bloque);
   });
+  if (huboError) {
+    resultTable.classList.add("es-shake-error");
+    setEstadoConsola("error");
+    reaccionRetrato("error");
+  } else {
+    resultTable.classList.remove("es-flash");
+    void resultTable.offsetHeight;
+    resultTable.classList.add("es-flash");
+    setEstadoConsola("ok");
+    reaccionRetrato("ok");
+  }
 }
 
 function setStatus(text, kind) {
@@ -607,6 +694,8 @@ async function runQuery() {
     return;
   }
   setStatus("Ejecutando...", "");
+  setEstadoConsola("querying");
+  mostrarRunningResultado(true);
   try {
     const result = await invoke("run_query", { sql });
     setStatus(`OK — ${result.rows.length} fila(s)`, "ok");
@@ -614,6 +703,11 @@ async function runQuery() {
   } catch (err) {
     setStatus(String(err), "error");
     resultTable.innerHTML = "";
+    setEstadoConsola("error");
+    reaccionRetrato("error");
+    resultTable.classList.add("es-shake-error");
+  } finally {
+    mostrarRunningResultado(false);
   }
 }
 
@@ -628,22 +722,28 @@ async function runAllQueries() {
     return;
   }
   setStatus("Ejecutando...", "");
+  setEstadoConsola("querying");
+  mostrarRunningResultado(true);
   const resultados = [];
   let errores = 0;
-  for (const sentencia of sentencias) {
-    try {
-      const result = await invoke("run_query", { sql: sentencia });
-      resultados.push({ rows: result.rows });
-    } catch (err) {
-      errores += 1;
-      resultados.push({ error: String(err) });
+  try {
+    for (const sentencia of sentencias) {
+      try {
+        const result = await invoke("run_query", { sql: sentencia });
+        resultados.push({ rows: result.rows });
+      } catch (err) {
+        errores += 1;
+        resultados.push({ error: String(err) });
+      }
     }
-  }
-  renderResultados(resultados);
-  if (errores === 0) {
-    setStatus(`OK — ${sentencias.length} consulta(s) ejecutada(s)`, "ok");
-  } else {
-    setStatus(`${errores} de ${sentencias.length} consulta(s) con error`, "error");
+    renderResultados(resultados);
+    if (errores === 0) {
+      setStatus(`OK — ${sentencias.length} consulta(s) ejecutada(s)`, "ok");
+    } else {
+      setStatus(`${errores} de ${sentencias.length} consulta(s) con error`, "error");
+    }
+  } finally {
+    mostrarRunningResultado(false);
   }
 }
 
@@ -659,6 +759,9 @@ async function seleccionarTicket(ticket) {
   ticketRetrato.innerHTML = retratoParaSolicitante(ticket.solicitante);
   consolaTitulo.textContent = `query-path — ${ticket.id}`;
   mostrarPantalla("consola");
+  setEstadoConsola("idle");
+  if (resultTable) resultTable.innerHTML = "";
+  mostrarRunningResultado(false);
   notificarClicPrimerTicket();
   try {
     const tablas = await invoke("pista_instinto", { id: ticket.id });
@@ -1038,6 +1141,8 @@ function renderBandeja(estadoTurno) {
     ? estadoTurno.pendientes.length
     : 0;
   presupuestoEl.textContent = estadoTurno.presupuesto_restante;
+  presupuestoRestanteActual = Number(estadoTurno.presupuesto_restante) || 0;
+  refrescarAlertaConsola();
   bandejaTitulo.textContent = TITULO_FASE[estadoTurno.fase] || "Bandeja — turno actual";
   empresaActual = estadoTurno.empresa;
   faseActual = estadoTurno.fase || "TrabajoNormal";
@@ -1401,12 +1506,14 @@ async function submitTicket() {
   enviandoTicket = true;
   if (btnSubmit) btnSubmit.disabled = true;
   setStatus("Enviando ticket...", "");
+  setEstadoConsola("querying");
   try {
     const score = await invoke("resolver_ticket", { id: ticketActivoId, sql: sqlInput.value });
     if (score.intentos_restantes) {
       setStatus(score.mensaje, "error");
       await cargarTurno();
       actualizarEtiquetaIntentos(ticketActivoId);
+      refrescarAlertaConsola();
       return false;
     }
     const tier = clasificarTierScore(score);
@@ -1767,6 +1874,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   btnCargarPartida = document.querySelector("#btn-cargar-partida");
   ticketRetrato = document.querySelector("#ticket-retrato");
   consolaTitulo = document.querySelector("#consola-titulo");
+  resultRunningEl = document.querySelector("#result-running");
+  ventanaConsolaEl = document.querySelector("#pantalla-consola .ventana-terminal");
   btnMuteMusica = document.querySelector("#btn-mute-musica");
   btnMuteEfectos = document.querySelector("#btn-mute-efectos");
   btnCerrarScoring = document.querySelector("#btn-cerrar-scoring");
@@ -1848,6 +1957,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     ticketActivoInfo.textContent = "Elige un ticket de la bandeja para empezar.";
     actualizarEtiquetaIntentos(null);
     pintarPistaInstinto([]);
+    limpiarEstadoConsola();
     mostrarPantalla("hub");
   });
 
